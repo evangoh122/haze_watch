@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+secrets.*
+
+# Data (keep structure via .gitkeep and metadata; do not commit datasets)
+data/**
+!data/**/
+!data/**/.gitkeep
+!data/README.md
+!data/metadata/**
+
+# Private research data: real company linkage + hand-sourced financials.
+# Code is tracked; a filled company file must NEVER be committed or published.
+private/companies/*.yaml
+!private/companies/_template.yaml
+private/out/
+
+# ML artifacts
+mlruns/
+mlartifacts/
+*.ckpt
+*.pt
+*.onnx
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
