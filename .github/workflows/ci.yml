@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    # Skipped when the Python workspace is absent (keeps split/partial PRs green).
+    if: ${{ hashFiles('backend/pyproject.toml', 'pipelines/pyproject.toml') != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install workspace
+        run: uv sync --all-packages
+      - name: Data guard (no restricted data tracked)
+        run: uv run python scripts/check_data_not_tracked.py
+      - name: Lint
+        run: uv run ruff check backend ml pipelines synthetic private scripts
+      - name: Backend tests
+        run: uv run pytest backend/tests
+      - name: Pipeline tests (the suite with real assertions)
+        run: uv run pytest pipelines/tests
+      - name: Synthetic engine tests (skipped until engine exists)
+        run: uv run pytest synthetic/tests
+      - name: Private linkage tests (hand-sourced schema; synthetic fixtures)
+        run: uv run pytest private/tests
+
+  frontend:
+    # Skipped when the frontend is absent (keeps split/partial PRs green).
+    if: ${{ hashFiles('frontend/package.json') != '' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
