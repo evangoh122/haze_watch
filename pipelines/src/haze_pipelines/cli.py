@@ -1,0 +1,313 @@
+﻿"""Command-line interface: ``haze-pipelines``.
+
+Designed for scheduled batch execution (cron / GitHub Actions) and local runs:
+
+    haze-pipelines ingest-firms --input data/raw/firms --out data/processed/fire_hotspots.parquet
+    haze-pipelines ingest-weather --stations data/raw/stations.csv --start 2026-01-01 --end 2026-01-31
+    haze-pipelines ingest-polygons --input data/raw/concessions/bnpb.geojson \
+        --source BNPB_GlobalForestWatch2 --boundary-type concession \
+        --license "GFW custom licence - verify before redistribution" --vintage 2025 \
+        --out data/processed/plantation_polygons.parquet
+    haze-pipelines build-features --as-of 2026-02-01
+    haze-pipelines run-exposure --as-of 2026-02-01
+    haze-pipelines run-forecast --features data/processed/environmental_features.parquet
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+from .config import Settings
+from .io import read_parquet
+
+
+def _cmd_ingest_firms(args: argparse.Namespace) -> int:
+    from .ingest_firms import ingest
+
+    df, out = ingest(
+        Path(args.input), Path(args.out), is_fixture=args.fixture, settings_obj=args.settings_obj
+    )
+    label = " [SYNTHETIC FIXTURE]" if args.fixture else ""
+    print(f"ingested {len(df)} hotspots{label} -> {out}")
+    return 0
+
+
+def _cmd_ingest_weather(args: argparse.Namespace) -> int:
+    import pandas as pd
+
+    from .ingest_weather import ingest_stations
+
+    stations_df = pd.read_csv(args.stations)
+    stations = stations_df.to_dict("records")
+    df, out = ingest_stations(
+        stations, args.start, args.end, Path(args.out), settings_obj=args.settings_obj
+    )
+    print(f"ingested {len(df)} station-days over {len(stations)} stations -> {out}")
+    return 0
+
+
+def _cmd_ingest_polygons(args: argparse.Namespace) -> int:
+    from .ingest_polygons import ingest_polygon_file
+
+    df, report, out = ingest_polygon_file(
+        Path(args.input),
+        Path(args.out),
+        source_dataset=args.source,
+        boundary_type=args.boundary_type,
+        license=args.license,
+        vintage=args.vintage,
+        treatment=args.treatment,
+        settings_obj=args.settings_obj,
+    )
+    print(f"ingested {len(df)} polygons -> {out} (quality passed: {report.passed})")
+    return 0 if report.passed else 2
+
+
+def _cmd_fetch_concessions(args: argparse.Namespace) -> int:
+    import json
+
+    from .ingest_polygons import LICENSE_WARNING, SOURCE_QUERY_URLS, fetch_arcgis_features
+
+    if not args.confirm_license:
+        print(f"refusing: pass --confirm-license after reviewing terms.\n{LICENSE_WARNING}", file=sys.stderr)
+        return 3
+
+    query_url = args.query_url or SOURCE_QUERY_URLS[args.source]
+    features = fetch_arcgis_features(
+        query_url,
+        page_size=args.page_size,
+        max_records=args.max_records,
+        confirm_license=True,
+    )
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps({"type": "FeatureCollection", "features": features}, indent=1), encoding="utf-8")
+    print(f"fetched {len(features)} features from {query_url} -> {out}")
+    print(f"NOTE: {LICENSE_WARNING}")
+    return 0
+
+
+def _cmd_build_features(args: argparse.Namespace) -> int:
+    from .build_features import build_and_save
+
+    features, out = build_and_save(
+        Path(args.polygons),
+        Path(args.hotspots),
+        Path(args.weather) if args.weather else None,
+        args.as_of,
+        Path(args.out),
+        settings_obj=args.settings_obj,
+    )
+    print(f"built {len(features)} feature rows as_of {args.as_of} -> {out}")
+    return 0
+
+
+def _cmd_run_exposure(args: argparse.Namespace) -> int:
+    from .run_exposure import CAVEAT, run_exposure
+
+    exposure, summary, _ = run_exposure(
+        Path(args.polygons),
+        Path(args.hotspots),
+        args.as_of,
+        Path(args.out),
+        Path(args.out_public),
+        settings_obj=args.settings_obj,
+    )
+    print(f"exposure rows: {len(exposure)} | summary: {summary}")
+    print(f"CAVEAT: {CAVEAT}")
+    return 0
+
+
+def _cmd_run_forecast(args: argparse.Namespace) -> int:
+    from .run_forecasts import DISCLAIMER, run_forecast
+
+    df, out = run_forecast(Path(args.features), Path(args.out), settings_obj=args.settings_obj)
+    print(f"forecast rows: {len(df)} -> {out}")
+    print(f"DISCLAIMER: {DISCLAIMER}")
+    return 0
+
+
+def _cmd_make_fixtures(args: argparse.Namespace) -> int:
+    from .fixtures import FIXTURE_NOTICE, fixture_hotspots
+
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    center = tuple(float(v) for v in args.center.split(",")) if args.center else (113.0, -2.0)
+    df = fixture_hotspots(n=args.n, center=(center[0], center[1]))
+    out = out_dir / "fixture_hotspots.csv"
+    df.to_csv(out, index=False)
+    print(f"wrote {len(df)} SYNTHETIC FIXTURE hotspot rows -> {out} (center lon,lat = {center})")
+    print(f"NOTICE: {FIXTURE_NOTICE}")
+    return 0
+
+
+def _cmd_query(args: argparse.Namespace) -> int:
+    """Ad-hoc analytical queries over processed Parquet outputs via DuckDB.
+
+    The optional ``spatial`` extension (official DuckDB extension, installed at
+    runtime - no pip package) enables ST_* functions and a ``dataset_geo`` view
+    with a decoded geometry column. Without it, ``dataset`` still works and
+    ``geometry`` is available as WKT text.
+    """
+    import duckdb
+
+    con = duckdb.connect(database=":memory:")
+    spatial = False
+    try:
+        con.execute("INSTALL spatial")
+        con.execute("LOAD spatial")
+        spatial = True
+    except Exception:  # noqa: BLE001, S110 - offline/blocked is fine: text queries still work
+        pass
+    try:
+        if args.file:
+            escaped = str(Path(args.file)).replace("'", "''")
+            con.execute(f"CREATE VIEW dataset AS SELECT * FROM read_parquet('{escaped}')")
+            if spatial:
+                try:
+                    con.execute(
+                        "CREATE VIEW dataset_geo AS "
+                        "SELECT *, ST_GeomFromText(geometry) AS geom FROM dataset"
+                    )
+                except Exception:  # noqa: BLE001 - this file has no WKT geometry column
+                    print(
+                        "note: no WKT 'geometry' column in this file; view 'dataset_geo' unavailable",
+                        file=sys.stderr,
+                    )
+        result = con.execute(args.sql).fetchdf()
+    finally:
+        con.close()
+    if args.sql.upper().lstrip().startswith("SELECT") and "ST_" in args.sql.upper() and not spatial:
+        print("note: duckdb spatial extension unavailable; ST_* functions will fail", file=sys.stderr)
+    print(result.to_string(index=False) if len(result) else "(no rows)")
+    return 0
+
+
+def _cmd_quality(args: argparse.Namespace) -> int:
+    from .quality import (
+        validate_features,
+        validate_forecast,
+        validate_hotspots,
+        validate_polygons,
+        validate_weather,
+    )
+
+    passed = True
+    for path in args.datasets:
+        p = Path(path)
+        df = read_parquet(p)
+        if "hotspot_id" in df.columns:
+            report = validate_hotspots(df, dataset=str(p))
+        elif "geometry" in df.columns:
+            report = validate_polygons(df, dataset=str(p))
+        elif "hazard_score" in df.columns:
+            report = validate_forecast(df, dataset=str(p))
+        elif "hotspot_count_7d" in df.columns:
+            report = validate_features(df, dataset=str(p))
+        else:
+            report = validate_weather(df, dataset=str(p))
+        status = "PASS" if report.passed else "FAIL"
+        print(f"[{status}] {p}: " + "; ".join(f"{c.name}={'ok' if c.passed else c.count}" for c in report.checks))
+        passed = passed and report.passed
+    return 0 if passed else 2
+
+
+def build_parser(settings_obj: Settings) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="haze-pipelines", description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("ingest-firms", help="Ingest NASA FIRMS CSV exports")
+    p.add_argument("--input", default=str(settings_obj.raw_dir / "firms"))
+    p.add_argument("--out", default=str(settings_obj.processed_dir / "fire_hotspots.parquet"))
+    p.add_argument(
+        "--fixture",
+        action="store_true",
+        help="Mark inputs as SYNTHETIC FIXTURE data (never use for real observations)",
+    )
+    p.set_defaults(func=_cmd_ingest_firms)
+
+    p = sub.add_parser("make-fixture-hotspots", help="Write labeled synthetic hotspot CSVs for testing")
+    p.add_argument("--out-dir", required=True)
+    p.add_argument("--n", type=int, default=12)
+    p.add_argument("--center", default=None, help="lon,lat center for the fixture cluster")
+    p.set_defaults(func=_cmd_make_fixtures)
+
+    p = sub.add_parser("ingest-weather", help="Ingest Open-Meteo/ERA5 daily weather")
+    p.add_argument("--stations", required=True, help="CSV with station_id,latitude,longitude columns")
+    p.add_argument("--start", required=True, help="YYYY-MM-DD")
+    p.add_argument("--end", required=True, help="YYYY-MM-DD")
+    p.add_argument("--out", default=str(settings_obj.processed_dir / "weather.parquet"))
+    p.set_defaults(func=_cmd_ingest_weather)
+
+    p = sub.add_parser("ingest-polygons", help="Normalize local concession/plantation GeoJSON")
+    p.add_argument("--input", required=True)
+    p.add_argument("--source", required=True, help="Source dataset name, e.g. BNPB_GlobalForestWatch2")
+    p.add_argument("--boundary-type", required=True, choices=["concession", "plantation", "mill", "other"])
+    p.add_argument("--license", required=True, help="Licence text/terms for the source dataset")
+    p.add_argument("--vintage", default=None, help="Data vintage year or date")
+    p.add_argument("--treatment", default="real-restricted", choices=["real-restricted", "synthetic-fixture"])
+    p.add_argument("--out", default=str(settings_obj.processed_dir / "plantation_polygons.parquet"))
+    p.set_defaults(func=_cmd_ingest_polygons)
+
+    p = sub.add_parser(
+        "fetch-concessions",
+        help="Fetch concession/peatland polygons from ArcGIS services (license gate applies)",
+    )
+    p.add_argument("--source", default="bnpb", choices=["bnpb", "gfw", "gfw-peatlands"])
+    p.add_argument("--query-url", default=None, help="Override the ArcGIS layer query URL")
+    p.add_argument("--out", required=True)
+    p.add_argument("--page-size", type=int, default=200)
+    p.add_argument("--max-records", type=int, default=None)
+    p.add_argument("--confirm-license", action="store_true")
+    p.set_defaults(func=_cmd_fetch_concessions)
+
+    p = sub.add_parser("build-features", help="Point-in-time environmental features")
+    p.add_argument("--polygons", default=str(settings_obj.processed_dir / "plantation_polygons.parquet"))
+    p.add_argument("--hotspots", default=str(settings_obj.processed_dir / "fire_hotspots.parquet"))
+    p.add_argument("--weather", default=None)
+    p.add_argument("--as-of", required=True)
+    p.add_argument("--out", default=str(settings_obj.processed_dir / "environmental_features.parquet"))
+    p.set_defaults(func=_cmd_build_features)
+
+    p = sub.add_parser("run-exposure", help="Hotspot x polygon exposure + anonymized public layer")
+    p.add_argument("--polygons", default=str(settings_obj.processed_dir / "plantation_polygons.parquet"))
+    p.add_argument("--hotspots", default=str(settings_obj.processed_dir / "fire_hotspots.parquet"))
+    p.add_argument("--as-of", required=True)
+    p.add_argument("--out", default=str(settings_obj.processed_dir / "exposure.parquet"))
+    p.add_argument("--out-public", default=str(settings_obj.processed_dir / "exposure_public.geojson"))
+    p.set_defaults(func=_cmd_run_exposure)
+
+    p = sub.add_parser("run-forecast", help="Baseline hazard scores (labeled baseline, not a model)")
+    p.add_argument("--features", default=str(settings_obj.processed_dir / "environmental_features.parquet"))
+    p.add_argument("--out", default=str(settings_obj.processed_dir / "forecast_baseline.parquet"))
+    p.set_defaults(func=_cmd_run_forecast)
+
+    p = sub.add_parser(
+        "query",
+        help="Run a DuckDB SQL query over processed Parquet (use read_parquet('path') or --file for view 'dataset')",
+    )
+    p.add_argument("--sql", required=True)
+    p.add_argument("--file", default=None, help="Parquet file exposed as the view 'dataset'")
+    p.set_defaults(func=_cmd_query)
+
+    p = sub.add_parser("quality", help="Run data-quality checks over processed datasets")
+    p.add_argument("datasets", nargs="+")
+    p.set_defaults(func=_cmd_quality)
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    # Fresh Settings on every invocation: honors HAZE_DATA_DIR and friends at
+    # call time, so tests can isolate the provenance ledger via the environment.
+    settings_obj = Settings()
+    parser = build_parser(settings_obj)
+    args = parser.parse_args(argv)
+    args.settings_obj = settings_obj
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
