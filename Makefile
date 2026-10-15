@@ -1,4 +1,4 @@
-.PHONY: setup up down test lint ingest-firms ingest-weather
+.PHONY: setup up down test lint ingest-firms ingest-firms-api ingest-weather
 
 setup:
 	uv sync --all-packages
@@ -29,6 +29,12 @@ END ?= 2026-01-31
 
 ingest-firms:
 	uv run haze-pipelines ingest-firms --input data/raw/firms --out data/processed/fire_hotspots.parquet
+
+# Automatic pull from the NASA FIRMS API (needs FIRMS_API_KEY / HAZE_FIRMS_API_KEY).
+# Override the window: make ingest-firms-api FIRMS_DAYS=5
+FIRMS_DAYS ?= 3
+ingest-firms-api:
+	uv run haze-pipelines ingest-firms --from-api --days $(FIRMS_DAYS) --out data/processed/fire_hotspots.parquet
 
 ingest-weather:
 	uv run haze-pipelines ingest-weather --stations data/raw/stations.csv --start $(START) --end $(END) --out data/processed/weather.parquet

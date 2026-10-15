@@ -1,0 +1,49 @@
+name: FIRMS ingest (scheduled)
+
+on:
+  schedule:
+    # Daily at 02:17 UTC. Adjust the cadence to taste.
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    env:
+      # Free MAP_KEY: https://firms.modaps.eosdis.nasa.gov/api/map_key/
+      HAZE_FIRMS_API_KEY: ${{ secrets.FIRMS_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Check for a FIRMS key
+        id: key
+        run: |
+          if [ -z "${HAZE_FIRMS_API_KEY}" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::FIRMS_API_KEY secret is not set - skipping the pull."
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install workspace
+        if: steps.key.outputs.present == 'true'
+        run: uv sync --all-packages
+
+      - name: Pull the last 3 days of detections (Indonesia bbox)
+        if: steps.key.outputs.present == 'true'
+        run: |
+          uv run haze-pipelines ingest-firms --from-api --days 3 \
+            --out data/processed/fire_hotspots.parquet
+
+      - name: Upload the hotspot parquet
+        if: steps.key.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fire_hotspots
+          path: data/processed/fire_hotspots.parquet
+          if-no-files-found: error
+          retention-days: 7

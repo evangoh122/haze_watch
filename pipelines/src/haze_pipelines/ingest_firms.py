@@ -176,13 +176,15 @@ def fetch_firms_area(
 ) -> pd.DataFrame:
     """Fetch an area extract from the FIRMS CSV API (requires FIRMS_API_KEY).
 
-    ``area`` is ``minLon,minLat,maxLon,maxSpan`` per the FIRMS area API.
+    ``area`` is ``west,south,east,north`` (a WGS84 bounding box) and ``days`` the
+    trailing window (1-10). See https://firms.modaps.eosdis.nasa.gov/api/area/.
     """
     key = api_key if api_key is not None else settings.firms_api_key
     if not key:
         raise RuntimeError(
-            "FIRMS_API_KEY is not configured. Place CSV exports in data/raw/firms/ "
-            "or set HAZE_FIRMS_API_KEY to enable API ingestion."
+            "FIRMS API key not configured. Set FIRMS_API_KEY (alias "
+            "HAZE_FIRMS_API_KEY) for automatic pulls, or place CSV exports in "
+            "data/raw/firms/ and ingest without --from-api."
         )
     if days < 1 or days > 10:
         raise ValueError("FIRMS area API supports 1-10 days per request")
@@ -209,6 +211,64 @@ def fetch_firms_area(
 def indonesia_bbox_check(df: pd.DataFrame) -> pd.Series:
     """Boolean mask: rows whose coordinates fall inside the Indonesia bbox."""
     return df.apply(lambda r: in_bbox(r["longitude"], r["latitude"], INDONESIA_BBOX), axis=1)
+
+
+def default_area(bbox: tuple[float, float, float, float] = INDONESIA_BBOX) -> str:
+    """FIRMS ``area`` string (``west,south,east,north``) for a bounding box."""
+    min_lon, min_lat, max_lon, max_lat = bbox
+    return f"{min_lon},{min_lat},{max_lon},{max_lat}"
+
+
+def ingest_from_api(
+    out_path: Path,
+    *,
+    area: str | None = None,
+    days: int = 3,
+    sensor: str = "MODIS_NRT",
+    settings_obj: Settings = settings,
+    client: httpx.Client | None = None,
+) -> tuple[pd.DataFrame, Path]:
+    """Automatic pull: fetch recent FIRMS detections and persist them.
+
+    Requires a free FIRMS MAP_KEY (``FIRMS_API_KEY`` / ``HAZE_FIRMS_API_KEY``).
+    Defaults to the Indonesia bounding box and the trailing ``days`` window.
+    Registered with treatment ``real`` - never ``synthetic-fixture``.
+    """
+    resolved_area = area or default_area()
+    df = fetch_firms_area(
+        resolved_area,
+        days,
+        api_key=settings_obj.firms_api_key,
+        client=client,
+        sensor=sensor,
+    )
+
+    from .io import write_parquet
+    from .provenance import register_dataset
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    write_parquet(
+        df,
+        out_path,
+        extra_metadata={"dataset": "fire_hotspots", "source": f"NASA_FIRMS API ({sensor})"},
+    )
+    register_dataset(
+        settings_obj.metadata_dir,
+        dataset_id="fire_hotspots::nasa_firms",
+        name="Active fire hotspots (NASA FIRMS)",
+        source=f"NASA FIRMS area API (sensor={sensor}, area={resolved_area}, days={days})",
+        license="NASA FIRMS terms (attribution required)",
+        treatment="real",
+        path=out_path,
+        row_count=len(df),
+        observation_start=str(df["observation_time"].min()) if len(df) else None,
+        observation_end=str(df["observation_time"].max()) if len(df) else None,
+        notes=(
+            "FIRMS detections are not confirmed burned area. Fetched via the FIRMS "
+            "area API; key is deliberately omitted from provenance."
+        ),
+    )
+    return df, out_path
 
 
 def ingest(

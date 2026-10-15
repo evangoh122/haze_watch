@@ -34,7 +34,10 @@ uv run haze-pipelines ingest-polygons --input data/raw/concessions/bnpb_gfw_2026
     --license "GFW custom licence - verify before redistribution" --vintage 2025 \
     --treatment real-restricted --out data/processed/plantation_polygons.parquet
 
-# 2. Fire hotspots (real FIRMS exports, or labeled fixtures for development)
+# 2. Fire hotspots - automatic pull (needs a free FIRMS_API_KEY), local CSVs, or fixtures
+uv run haze-pipelines ingest-firms --from-api --days 3 --out data/processed/fire_hotspots.parquet
+uv run haze-pipelines ingest-firms --from-api --area 95,-6,120,6 --sensor VIIRS_SNPP_NRT \
+    --out data/processed/fire_hotspots.parquet
 uv run haze-pipelines ingest-firms --input data/raw/firms --out data/processed/fire_hotspots.parquet
 uv run haze-pipelines make-fixture-hotspots --out-dir data/raw/firms --n 40 --center 116.2,-2.2
 uv run haze-pipelines ingest-firms --input data/raw/firms --fixture --out data/processed/fire_hotspots.parquet
@@ -141,9 +144,13 @@ Caveats (this build of the extension):
 
 ## Not yet implemented
 
-- FIRMS API live fetch (`--fixture` flag exists; `FIRMS_API_KEY` path is written but
-  untested against the live API)
+- FIRMS API live fetch is now wired (`ingest-firms --from-api`) and unit-tested
+  against a stubbed client, but has **not** been exercised against the live FIRMS API
+  from this repository - that needs a free MAP_KEY. The API caps a request at 10 days,
+  so longer backfills must be looped.
 - MapBiomas land-cover and peatland ingestion (`gfw-peatlands` source is wired but
   the WRI query endpoint was returning HTTP 500 at last check)
-- Scheduled execution (cron/GitHub Actions) — Phase 5
+- Scheduled execution: `.github/workflows/firms-ingest.yml` pulls daily and uploads the
+  parquet as an artifact (requires the `FIRMS_API_KEY` repo secret; it skips cleanly
+  when the secret is absent). Writing scheduled output into a database is Phase 5.
 - Burned-area estimation from imagery — Phase 3

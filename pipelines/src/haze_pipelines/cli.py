@@ -19,11 +19,30 @@ import argparse
 import sys
 from pathlib import Path
 
+import httpx
+
 from .config import Settings
 from .io import read_parquet
 
 
 def _cmd_ingest_firms(args: argparse.Namespace) -> int:
+    if args.from_api:
+        from .ingest_firms import ingest_from_api
+
+        try:
+            df, out = ingest_from_api(
+                Path(args.out),
+                area=args.area,
+                days=args.days,
+                sensor=args.sensor,
+                settings_obj=args.settings_obj,
+            )
+        except (RuntimeError, ValueError, httpx.HTTPError) as exc:
+            print(f"FIRMS API ingest failed: {exc}", file=sys.stderr)
+            return 3
+        print(f"fetched {len(df)} hotspots from the NASA FIRMS API -> {out}")
+        return 0
+
     from .ingest_firms import ingest
 
     df, out = ingest(
@@ -218,13 +237,38 @@ def build_parser(settings_obj: Settings) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="haze-pipelines", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p = sub.add_parser("ingest-firms", help="Ingest NASA FIRMS CSV exports")
-    p.add_argument("--input", default=str(settings_obj.raw_dir / "firms"))
+    p = sub.add_parser("ingest-firms", help="Ingest NASA FIRMS hotspots (local CSVs or live API)")
+    p.add_argument(
+        "--input",
+        default=str(settings_obj.raw_dir / "firms"),
+        help="Directory of FIRMS CSVs (ignored with --from-api)",
+    )
     p.add_argument("--out", default=str(settings_obj.processed_dir / "fire_hotspots.parquet"))
     p.add_argument(
         "--fixture",
         action="store_true",
         help="Mark inputs as SYNTHETIC FIXTURE data (never use for real observations)",
+    )
+    p.add_argument(
+        "--from-api",
+        action="store_true",
+        help="Pull automatically from the NASA FIRMS API (requires FIRMS_API_KEY)",
+    )
+    p.add_argument(
+        "--area",
+        default=None,
+        help="west,south,east,north bounding box (default: Indonesia)",
+    )
+    p.add_argument(
+        "--days",
+        type=int,
+        default=3,
+        help="Trailing window in days, 1-10 (FIRMS API limit)",
+    )
+    p.add_argument(
+        "--sensor",
+        default="MODIS_NRT",
+        help="e.g. MODIS_NRT, VIIRS_SNPP_NRT, VIIRS_NOAA20_NRT, VIIRS_NOAA21_NRT",
     )
     p.set_defaults(func=_cmd_ingest_firms)
 
