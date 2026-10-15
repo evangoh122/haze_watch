@@ -1,0 +1,92 @@
+"""Unit tests: FIRMS hotspot normalization and validation."""
+
+import pandas as pd
+import pytest
+
+from haze_pipelines.fixtures import fixture_hotspots
+from haze_pipelines.ingest_firms import normalize_firms
+from haze_pipelines.quality import validate_hotspots
+
+
+def test_normalize_firms_canonical_schema():
+    raw = fixture_hotspots(n=5)
+    out = normalize_firms(raw, source="FIXTURE", available_lag_hours=3.0, is_fixture=True)
+
+    assert len(out) == 5
+    assert out["source"].eq("FIXTURE").all()
+    assert out["is_fixture"].all()
+    assert out["hotspot_id"].is_unique
+    # availability never precedes observation
+    assert (out["available_time"] >= out["observation_time"]).all()
+
+
+def test_normalize_firms_deduplicates_identical_detections():
+    raw = fixture_hotspots(n=4)
+    doubled = pd.concat([raw, raw], ignore_index=True)
+    out = normalize_firms(doubled, source="FIXTURE", available_lag_hours=3.0, is_fixture=True)
+    assert len(out) == 4
+
+
+def test_normalize_firms_rejects_missing_columns():
+    with pytest.raises(ValueError, match="missing required columns"):
+        normalize_firms(pd.DataFrame({"latitude": [1.0]}), source="X", available_lag_hours=1.0)
+
+
+def test_normalize_real_firms_schema_acq_date_acq_time_hhmm_int():
+    """Regression: actual FIRMS exports use acq_date/acq_time (HHMM integer).
+
+    The fixture previously used non-standard acquired_* names, so tests passed
+    while real downloads would have been rejected.
+    """
+    real_export = pd.DataFrame(
+        {
+            "latitude": [-2.21, -1.10],
+            "longitude": [113.92, 112.30],
+            "brightness": [321.5, 330.1],
+            "scan": [1.0, 1.1],
+            "track": [1.0, 1.0],
+            "acq_date": ["2026-09-15", "2026-09-15"],
+            "acq_time": [430, 1830],  # HHMM integers, as FIRMS writes them
+            "satellite": ["Terra", "Aqua"],
+            "confidence": [65, 80],
+            "version": ["6.1NRT", "6.1NRT"],
+            "bright_t31": [296.0, 297.5],
+            "frp": [5.2, 12.9],
+            "daynight": ["D", "N"],
+            "type": [0, 0],
+        }
+    )
+    out = normalize_firms(real_export, source="NASA_FIRMS", available_lag_hours=3.0)
+
+    assert len(out) == 2
+    assert out["observation_time"].dt.strftime("%H:%M").tolist() == ["04:30", "18:30"]
+    assert out["confidence_pct"].tolist() == [65.0, 80.0]
+    assert (out["available_time"] > out["observation_time"]).all()
+
+
+def test_normalize_real_firms_viirs_brightness_column():
+    """VIIRS exports carry bright_ti4 instead of brightness."""
+    viirs = pd.DataFrame(
+        {
+            "latitude": [-2.21],
+            "longitude": [113.92],
+            "bright_ti4": [325.4],
+            "acq_date": ["2026-09-15"],
+            "acq_time": [815],
+            "satellite": ["NPP"],
+            "confidence": ["high"],
+            "frp": [3.3],
+            "daynight": ["D"],
+        }
+    )
+    out = normalize_firms(viirs, source="NASA_FIRMS_VIIRS", available_lag_hours=3.0)
+    assert out["brightness_k"].iloc[0] == 325.4
+    assert out["confidence_pct"].iloc[0] == 90.0  # "high" label mapped
+    assert out["observation_time"].dt.strftime("%H:%M").iloc[0] == "08:15"
+
+
+def test_hotspot_quality_passes_on_normalized_fixture():
+    raw = fixture_hotspots(n=6)
+    out = normalize_firms(raw, source="FIXTURE", available_lag_hours=3.0, is_fixture=True)
+    report = validate_hotspots(out)
+    assert report.passed, [c.name for c in report.errors]
