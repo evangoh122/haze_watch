@@ -1,14 +1,23 @@
-name: CI
+name: Python CI
 
 on:
   push:
     branches: [main]
   pull_request:
+    paths:
+      - "backend/**"
+      - "pipelines/**"
+      - "ml/**"
+      - "synthetic/**"
+      - "private/**"
+      - "scripts/**"
+      - "data/metadata/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/python.yml"
 
 jobs:
   python:
-    # Skipped when the Python workspace is absent (keeps split/partial PRs green).
-    if: ${{ hashFiles('backend/pyproject.toml', 'pipelines/pyproject.toml') != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,21 +36,3 @@ jobs:
         run: uv run pytest synthetic/tests
       - name: Private linkage tests (hand-sourced schema; synthetic fixtures)
         run: uv run pytest private/tests
-
-  frontend:
-    # Skipped when the frontend is absent (keeps split/partial PRs green).
-    if: ${{ hashFiles('frontend/package.json') != '' }}
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
