@@ -14,7 +14,6 @@ on:
       - "data/metadata/**"
       - "pyproject.toml"
       - "uv.lock"
-      - ".github/workflows/python.yml"
 
 jobs:
   python:
