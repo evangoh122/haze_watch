@@ -7,6 +7,8 @@ on:
 
 jobs:
   python:
+    # Skipped when the Python workspace is absent (keeps split/partial PRs green).
+    if: ${{ hashFiles('backend/pyproject.toml', 'pipelines/pyproject.toml') != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +29,8 @@ jobs:
         run: uv run pytest private/tests
 
   frontend:
+    # Skipped when the frontend is absent (keeps split/partial PRs green).
+    if: ${{ hashFiles('frontend/package.json') != '' }}
     runs-on: ubuntu-latest
     defaults:
       run:
