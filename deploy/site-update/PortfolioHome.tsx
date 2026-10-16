@@ -185,8 +185,9 @@ export default function PortfolioHome() {
           <div className="relative max-w-5xl">
             <Swiper
               modules={[A11y, Keyboard, Navigation]}
-              slidesPerView={1}
-              spaceBetween={0}
+              slidesPerView={1.15}
+              spaceBetween={28}
+              centeredSlides
               rewind
               watchSlidesProgress
               keyboard={{ enabled: true }}
