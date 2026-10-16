@@ -25,11 +25,26 @@ ALLOWED_EXACT = {"data/README.md"}
 # be tracked either; only the schema template is allowed to be committed.
 PRIVATE_ALLOWED = {"private/companies/_template.yaml"}
 
+# Code/docs are fine anywhere under private/ (tests included). Data files
+# (.parquet, .csv, ...) are not - not even under private/tests/.
+PRIVATE_CODE_SUFFIXES = (".py", ".md", ".txt", ".gitkeep")
+
 
 def _is_private_data(path: str) -> bool:
+    """Private research data anywhere under private/, not just two subdirs.
+
+    Only the explicit allowlist (templates, docs, code) may be tracked.
+    """
+    return path.startswith("private/") and not _is_private_allowed(path)
+
+
+def _is_private_allowed(path: str) -> bool:
     return (
-        path.startswith("private/companies/") and path not in PRIVATE_ALLOWED
-    ) or path.startswith("private/out/")
+        path in PRIVATE_ALLOWED
+        or path == "private/README.md"
+        or path == "private/conftest.py"
+        or path.endswith(PRIVATE_CODE_SUFFIXES)  # code/docs only; data files are not
+    )
 
 
 def _is_allowed(path: str) -> bool:

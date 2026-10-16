@@ -20,7 +20,9 @@ class LLMSettings(BaseSettings):
     # Unity Gateway, vLLM, ...). Empty => deterministic fallback client.
     base_url: str = ""
     api_key: str = ""
-    model: str = "default"
+    # Must be a real model id when the HTTP provider is configured (e.g.
+    # deepseek-chat); "default" is rejected by most providers.
+    model: str = ""
 
     max_tokens: int = 600
     temperature: float = 0.2

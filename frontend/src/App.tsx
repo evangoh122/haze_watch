@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
+import { API_BASE_URL } from "./lib/api";
 import BankingDemo from "./pages/BankingDemo";
 import ChatPage from "./pages/ChatPage";
 import FireForecast from "./pages/FireForecast";
@@ -68,6 +70,22 @@ function NavGroup({ label, entries }: { label: string; entries: NavEntry[] }) {
 }
 
 export default function App() {
+  const [health, setHealth] = useState<"unknown" | "online" | "offline">("unknown");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/health`)
+      .then((response) => {
+        if (!cancelled) setHealth(response.ok ? "online" : "offline");
+      })
+      .catch(() => {
+        if (!cancelled) setHealth("offline");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="flex min-h-screen">
       {/* Sidebar (RAG workbench pattern): brand, workspace, nav, system card */}
@@ -103,9 +121,21 @@ export default function App() {
           <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.13em] text-[#8e9bae]">
             System
           </p>
-          <p className="mt-2 font-mono text-[11px] text-[#93a6bd]">
-            <span className="mr-[7px] inline-block h-[7px] w-[7px] rounded-full bg-[#4ed0a9] shadow-[0_0_0_3px_#204e4b]" />
-            PIPELINE ONLINE
+          <p className="mt-2 font-mono text-[11px] text-secondary">
+            <span
+              className={`mr-[7px] inline-block h-[7px] w-[7px] rounded-full ${
+                health === "online"
+                  ? "bg-bullish shadow-[0_0_0_3px_rgba(67,209,158,0.25)]"
+                  : health === "offline"
+                    ? "bg-bearish shadow-[0_0_0_3px_rgba(255,114,127,0.25)]"
+                    : "bg-muted"
+              }`}
+            />
+            {health === "online"
+              ? "PIPELINE ONLINE"
+              : health === "offline"
+                ? "BACKEND UNREACHABLE"
+                : "STATUS UNKNOWN"}
           </p>
           <p className="mt-1 font-mono text-[10px] text-[#6f7b8e]">
             model: persistence-baseline 0.1.0

@@ -11,8 +11,8 @@
 
 export interface ComparisonRow {
   label: string;
-  baseline: number;
-  stressed: number;
+  baseline: number | null;
+  stressed: number | null;
 }
 
 /** Baseline vs scenario comparison chart answering one question per metric set. */
@@ -37,7 +37,11 @@ export default function ComparisonChart({
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#dce3eb" />
           <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#6f7b8e" }} />
           <YAxis tick={{ fontSize: 11, fill: "#6f7b8e" }} unit={unit} />
-          <Tooltip formatter={(value: number) => `${value.toFixed(2)}`} />
+          <Tooltip
+            formatter={(value) =>
+              value === null || value === undefined ? "n.m." : `${Number(value).toFixed(2)}`
+            }
+          />
           <Legend />
           <Bar dataKey="baseline" name="Baseline" fill="#16856b" radius={[3, 3, 0, 0]} />
           <Bar dataKey="stressed" name="Scenario" fill="#c27821" radius={[3, 3, 0, 0]} />

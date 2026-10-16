@@ -206,6 +206,7 @@ def _cmd_query(args: argparse.Namespace) -> int:
 
 def _cmd_quality(args: argparse.Namespace) -> int:
     from .quality import (
+        validate_exposure,
         validate_features,
         validate_forecast,
         validate_hotspots,
@@ -223,6 +224,8 @@ def _cmd_quality(args: argparse.Namespace) -> int:
             report = validate_polygons(df, dataset=str(p))
         elif "hazard_score" in df.columns:
             report = validate_forecast(df, dataset=str(p))
+        elif "hotspot_count_in_polygon_30d" in df.columns:
+            report = validate_exposure(df, dataset=str(p))
         elif "hotspot_count_7d" in df.columns:
             report = validate_features(df, dataset=str(p))
         else:

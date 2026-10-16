@@ -6,7 +6,13 @@ useDefault = true
 
 [allowlist]
 description = "Placeholder-only example files and documentation"
+# Narrow value-level allowlists: paths stay scanned so a real pasted key is still caught.
+regexes = [
+  '''change-me''',
+  '''sk-\.\.\.''',
+  '''your[_-]?api[_-]?key''',
+  '''sk-[A-Za-z0-9]{4}\.\.\.''',
+]
 paths = [
   '''\.env\.example$''',
-  '''^docs/.*\.md$''',
 ]

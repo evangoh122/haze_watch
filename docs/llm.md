@@ -10,7 +10,7 @@ compatible provider works via environment variables:
 
 | Provider | `LLM_BASE_URL` | `LLM_MODEL` | Notes |
 |---|---|---|---|
-| **DeepSeek** (default documented) | `https://api.deepseek.com` | `deepseek-chat` or `deepseek-reasoner` | `deepseek-reasoner` exposes chain-of-thought in `reasoning_content`; only `content` is shown to users |
+| **DeepSeek** (default documented) | `https://api.deepseek.com` | a **currently valid** model id from the DeepSeek docs | Model ids rotate over time (e.g. `deepseek-chat` generations get retired); always set `LLM_MODEL` explicitly and check the current API docs. `deepseek-reasoner` exposes chain-of-thought in `reasoning_content`; only `content` is shown to users |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` etc. | |
 | Databricks Foundation Model API / Unity Gateway | your workspace OpenAI-compatible URL | served model name | |
 | Local vLLM | `http://localhost:8000/v1` | model id | |
@@ -41,6 +41,10 @@ POST /api/v1/chat
 
 - **Grounding**: answers cite registered datasets (`sources[]` includes
   `treatment` = real / real-restricted / synthetic-fixture / derived-unverified).
+  Historical runs live in the private HF dataset `egoh33/haze-watch-historical`;
+  `scripts/fetch_history_from_hf.py` pulls them into `data/hf_history/`, and
+  setting `LLM_DATA_DIR=data/hf_history` makes the agent ground on that history
+  (registry + exposure summaries + forecast rows) instead of the local run.
 - **Guardrails**: system prompt enforces the data policy (synthetic labeling,
   hotspots != burned area, hazard score != PD, no real-company or causation
   claims); output validation flags patterns like "actuarially validated",

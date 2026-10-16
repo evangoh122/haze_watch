@@ -22,6 +22,16 @@ function defaultDate(): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Escape API-provided values before interpolating them into popup HTML. */
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function tileBounds(z: number, x: number, y: number) {
   const n = 2 ** z;
   const lonLeft = (x / n) * 360 - 180;
@@ -80,6 +90,9 @@ export default function LiveFireMap() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [date, setDate] = useState(defaultDate());
+  const dateRef = useRef(date);
+  dateRef.current = date;
+  const [mapReady, setMapReady] = useState(false);
   const [showGibs, setShowGibs] = useState(true);
   const [showHotspots, setShowHotspots] = useState(true);
   const [showExposure, setShowExposure] = useState(true);
@@ -130,7 +143,8 @@ export default function LiveFireMap() {
         "bottom-right",
       );
 
-      map.on("load", () => {
+        map.on("load", () => {
+        setMapReady(true);
         // Anonymized concession exposure (simplified geometry, no attribution fields).
         map.addSource("exposure", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
         map.addLayer({
@@ -175,7 +189,7 @@ export default function LiveFireMap() {
 
         map.addSource("gibs-fires", {
           type: "raster",
-          tiles: [`gibs://{z}/{x}/{y}/${date}`],
+          tiles: [`gibs://{z}/{x}/{y}/${dateRef.current}`],
           tileSize: 256,
           maxzoom: 9,
           attribution: "NASA EOSDIS GIBS",
@@ -201,9 +215,9 @@ export default function LiveFireMap() {
             new maplibregl.Popup()
               .setLngLat(event.lngLat)
               .setHTML(
-                `<strong style="font-family:IBM Plex Mono,monospace;font-size:11px">${p.polygon_id}</strong><br/>` +
-                  `<span style="font-size:11px">detections in polygon (30d): ${p.hotspot_count_in_polygon_30d} · within ${p.hotspot_count_near_30d}</span><br/>` +
-                  `<span style="font-size:10px;color:#6f7b8e">${p.caveat ?? ""}</span>`,
+                `<strong style="font-family:JetBrains Mono,monospace;font-size:11px">${escapeHtml(p.polygon_id)}</strong><br/>` +
+                  `<span style="font-size:11px">detections in polygon (30d): ${escapeHtml(p.hotspot_count_in_polygon_30d)} · within ${escapeHtml(p.hotspot_count_near_30d)}</span><br/>` +
+                  `<span style="font-size:10px;color:#818791">${escapeHtml(p.caveat ?? "")}</span>`,
               )
               .addTo(map);
           });
@@ -215,9 +229,9 @@ export default function LiveFireMap() {
           new maplibregl.Popup()
             .setLngLat(event.lngLat)
             .setHTML(
-              `<strong style="font-family:IBM Plex Mono,monospace;font-size:11px">${p.label}</strong><br/>` +
-                `<span style="font-size:11px">${p.company} · ${p.province} · ${p.areaHa} ha</span><br/>` +
-                `<span style="font-size:10px;color:#c27821">SYNTHETIC ASSET - FICTIONAL</span>`,
+              `<strong style="font-family:JetBrains Mono,monospace;font-size:11px">${escapeHtml(p.label)}</strong><br/>` +
+                `<span style="font-size:11px">${escapeHtml(p.company)} · ${escapeHtml(p.province)} · ${escapeHtml(p.areaHa)} ha</span><br/>` +
+                `<span style="font-size:10px;color:#d6b65a">SYNTHETIC ASSET - FICTIONAL</span>`,
             )
             .addTo(map);
         });
@@ -238,13 +252,21 @@ export default function LiveFireMap() {
     };
   }, []);
 
+  // Push hotspot data into the map source whenever the fetch resolves/changes.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map) return;
+    const source = map.getSource("hotspots") as maplibregl.GeoJSONSource | undefined;
+    source?.setData(hotspotGeojson as GeoJSON.FeatureCollection);
+  }, [mapReady, hotspotGeojson]);
+
   // Rebuild the GIBS raster source when the observation date changes.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!mapReady || !map) return;
     const source = map.getSource("gibs-fires") as maplibregl.RasterTileSource | undefined;
     if (source?.setTiles) source.setTiles([`gibs://{z}/{x}/{y}/${date}`]);
-  }, [date]);
+  }, [date, mapReady]);
 
   // Layer visibility toggles.
   useEffect(() => {

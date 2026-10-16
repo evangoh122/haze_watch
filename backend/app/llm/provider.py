@@ -102,7 +102,29 @@ def answer_from_context(question: str, context: GroundedContext) -> str:
             )
         return "\n".join(lines)
 
-    if any(k in q for k in ("hotspot", "detection", "fire", "exposure", "polygon", "concession", "how many")):
+    # Forecast questions take precedence over the broader fire/exposure branch
+    # ("what is the fire forecast?" must reach the forecast answer).
+    if any(k in q for k in ("forecast", "hazard", "risk score", "predict", "probability")):
+        has_forecast = any(
+            "forecast" in str(entry.get("dataset_id", "")).lower() for entry in context.registry
+        )
+        if not has_forecast:
+            return (
+                f"{label} No forecast dataset is registered in this deployment, so I "
+                "cannot report fire forecasts. When it is loaded, it is a deterministic "
+                "baseline hazard score (0-1) - not a calibrated probability, not a "
+                "validated fire forecast, and not a probability of default."
+            )
+        return (
+            f"{label} The loaded forecast is a deterministic baseline hazard score "
+            "(0-1), not a calibrated probability, not a validated fire forecast and "
+            "not a probability of default. ML models arrive in Phase 2 - no "
+            "predictive accuracy is claimed today."
+        )
+
+    if any(k in q for k in ("hotspot", "detection", "fire", "exposure", "polygon", "concession", "how many")) and not any(
+        k in q for k in ("forecast", "hazard", "predict", "probability")
+    ):
         if not summary:
             return f"{label} No exposure summary is loaded, so I cannot report fire exposure figures."
         lines = [
@@ -115,14 +137,6 @@ def answer_from_context(question: str, context: GroundedContext) -> str:
         if summary.get("warning"):
             lines.append(f"- WARNING: {summary['warning']}")
         return "\n".join(lines)
-
-    if any(k in q for k in ("forecast", "hazard", "risk score", "predict", "probability")):
-        return (
-            f"{label} The loaded forecast is a deterministic baseline hazard score "
-            "(0-1), not a calibrated probability, not a validated fire forecast and "
-            "not a probability of default. ML models arrive in Phase 2 - no "
-            "predictive accuracy is claimed today."
-        )
 
     if any(k in q for k in ("company", "financial", "borrower", "credit", "insurance", "ebitda", "loan")):
         return (
@@ -154,5 +168,10 @@ def make_client(settings: LLMSettings | None = None) -> ChatClient:
     """Pick the provider: HTTP client when configured, deterministic fallback otherwise."""
     settings = settings or llm_settings
     if settings.base_url and settings.api_key:
+        if not settings.model:
+            raise RuntimeError(
+                "LLM_MODEL must be set to a valid model id (e.g. deepseek-chat) when "
+                "LLM_BASE_URL and LLM_API_KEY are configured. See docs/llm.md."
+            )
         return OpenAICompatibleClient()
     return DeterministicFallbackClient()
