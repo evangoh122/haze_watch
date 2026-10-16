@@ -187,6 +187,13 @@ _EMPTY_WINDOW_NOTICES = {"no hotspots available", "no data available"}
 MAX_DAYS_PER_REQUEST = 5
 
 
+def _backoff_seconds(attempt: int) -> float:
+    """Exponential backoff with jitter (shared-key bursts must not synchronize)."""
+    import random
+
+    return min(30.0, 2.0**attempt) * (0.5 + random.random())
+
+
 def fetch_firms_area(
     area: str,
     days: int,
@@ -195,6 +202,8 @@ def fetch_firms_area(
     client: httpx.Client | None = None,
     sensor: str = "MODIS_NRT",
     date: str | None = None,
+    max_retries: int = 4,
+    sleep=time.sleep,
 ) -> pd.DataFrame:
     """Fetch an area extract from the FIRMS CSV API (requires FIRMS_API_KEY).
 
@@ -226,8 +235,32 @@ def fetch_firms_area(
     own_client = client is None
     client = client or httpx.Client(timeout=60.0)
     try:
-        response = client.get(url)
-        response.raise_for_status()
+        body = ""
+        status = 0
+        for attempt in range(max_retries):
+            try:
+                response = client.get(url)
+            except httpx.TransportError:
+                if attempt == max_retries - 1:
+                    raise
+                if sleep is not None:
+                    sleep(_backoff_seconds(attempt))
+                continue
+            status = response.status_code
+            # Read the body BEFORE judging the status: FIRMS explains failures
+            # (and empty windows) in a short plain-text notice that never
+            # contains the key. HTTP 400 has proven transient (shared-key
+            # bursts), so 4xx/5xx retry with backoff + jitter.
+            body = (response.text or "").strip()
+            if status < 400:
+                break
+            if attempt == max_retries - 1:
+                raise RuntimeError(
+                    f"FIRMS API HTTP {status} ({sensor}, {days}-day window from "
+                    f"{date or 'today'}): {body[:200]}"
+                )
+            if sleep is not None:
+                sleep(_backoff_seconds(attempt))
     finally:
         if own_client:
             client.close()
@@ -325,6 +358,7 @@ def fetch_firms_range(
                 client=client,
                 sensor=sensor,
                 date=window_start,
+                sleep=sleep,
             )
         )
         offset += span

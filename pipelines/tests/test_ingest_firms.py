@@ -111,8 +111,9 @@ FIRMS_CSV = (
 
 
 class _FakeResponse:
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str, status_code: int = 200) -> None:
         self.text = text
+        self.status_code = status_code
 
     def raise_for_status(self) -> None:
         return None
@@ -252,7 +253,9 @@ def test_fetch_firms_area_empty_notice_returns_empty_frame():
 def test_fetch_firms_area_bad_key_raises_without_leaking_the_key():
     client = _FakeClient("Invalid MAP_KEY. Please check your MAP_KEY.")
     with pytest.raises(RuntimeError, match="FIRMS API error") as exc:
-        fetch_firms_area("94,-11.5,141.5,6.5", 3, api_key="SECRETKEY123", client=client)
+        fetch_firms_area(
+            "94,-11.5,141.5,6.5", 3, api_key="SECRETKEY123", client=client, sleep=None
+        )
     assert "SECRETKEY123" not in str(exc.value)  # the MAP_KEY must never reach logs
 
 
@@ -260,7 +263,48 @@ def test_fetch_firms_area_unknown_notice_raises():
     """A transient service notice must fail loudly, not fake an empty window."""
     client = _FakeClient("Service temporarily degraded, retry later.")
     with pytest.raises(RuntimeError, match="FIRMS API error"):
-        fetch_firms_area("94,-11.5,141.5,6.5", 3, api_key="KEY", client=client)
+        fetch_firms_area(
+            "94,-11.5,141.5,6.5", 3, api_key="KEY", client=client, sleep=None
+        )
+
+
+class _SequenceClient(_FakeClient):
+    """Returns queued (status_code, text) responses."""
+
+    def __init__(self, responses: list[tuple[int, str]]) -> None:
+        self._responses = list(responses)
+        self.urls: list[str] = []
+
+    def get(self, url: str, **_: object) -> _FakeResponse:
+        self.urls.append(url)
+        status, text = self._responses.pop(0)
+        return _FakeResponse(text, status_code=status)
+
+
+def test_fetch_firms_area_retries_transient_http_errors():
+    """A400 has proven transient (shared-key bursts) - retry with backoff."""
+    client = _SequenceClient([(400, "Bad Request"), (200, FIRMS_CSV)])
+    sleeps: list[float] = []
+    df = fetch_firms_area(
+        "94,-11.5,141.5,6.5", 3, api_key="KEY", client=client, sleep=sleeps.append
+    )
+    assert len(df) == 2
+    assert len(client.urls) == 2 and len(sleeps) == 1
+
+
+def test_fetch_firms_area_final_failure_surfaces_notice_not_key():
+    client = _SequenceClient([(400, "Invalid MAP_KEY."), (400, "Invalid MAP_KEY.")])
+    with pytest.raises(RuntimeError, match="HTTP 400") as exc:
+        fetch_firms_area(
+            "94,-11.5,141.5,6.5",
+            3,
+            api_key="SECRETKEY123",
+            client=client,
+            max_retries=2,
+            sleep=None,
+        )
+    assert "Invalid MAP_KEY" in str(exc.value)  # FIRMS' reason reaches the log
+    assert "SECRETKEY123" not in str(exc.value)  # the key never does
 
 
 def test_fetch_firms_range_stops_at_today():

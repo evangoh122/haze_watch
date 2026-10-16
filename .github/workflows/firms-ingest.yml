@@ -15,12 +15,19 @@ on:
         required: false
         default: "7"
       sensor:
-        description: "FIRMS sensor (MODIS_NRT, VIIRS_SNPP_NRT, VIIRS_NOAA20_NRT, VIIRS_NOAA21_NRT)"
+        description: "FIRMS sensor: *_SP for history/archive quality (MODIS_SP, VIIRS_SNPP_SP, VIIRS_NOAA20_SP, VIIRS_NOAA21_SP) or *_NRT for recency (MODIS_NRT, VIIRS_SNPP_NRT, VIIRS_NOAA20_NRT, VIIRS_NOAA21_NRT). NRT sources only serve their retention window - use _SP for backfills."
         required: false
         default: "MODIS_NRT"
 
 permissions:
   contents: read
+
+# One lane at a time: all sensors share a single MAP_KEY, and parallel runs
+# burst into transient HTTP 400s (observed 2026-10-16: four lanes died in the
+# same 2-second window). Queued runs wait; nothing is cancelled.
+concurrency:
+  group: firms-api
+  cancel-in-progress: false
 
 jobs:
   sync:

@@ -65,50 +65,50 @@ def sync_history(
 
     Returns ``{year: (fetched_rows, merged_rows)}``.
     """
+    from datetime import date as date_cls
+    from datetime import timedelta
+
     from haze_pipelines.geoparquet import merge_hotspots, points_to_geoparquet
     from haze_pipelines.ingest_firms import fetch_firms_range
 
-    frames: list[pd.DataFrame] = []
     if start_date is None:
         # Trailing window: DATE-anchored at today-backfill_days+1.
-        from datetime import date as date_cls
-        from datetime import timedelta
-
-        start_date = (date_cls.today() - timedelta(days=backfill_days - 1)).isoformat()
-    frames.append(
-        fetch_firms_range(
-            area,
-            start_date,
-            backfill_days,
-            sensor=sensor,
-            progress=progress,
-        )
-    )
-    df = pd.concat(frames, ignore_index=True)
-    if not len(df):
-        return {}
+        start = date_cls.today() - timedelta(days=backfill_days - 1)
+    else:
+        start = date_cls.fromisoformat(start_date)
+    end = start + timedelta(days=backfill_days - 1)
 
     from huggingface_hub import HfApi
 
     api = HfApi()
     results: dict[int, tuple[int, int]] = {}
-    for year_value, chunk in df.groupby(df["observation_time"].dt.year):
-        year = int(year_value)
-        # Local files mirror the per-sensor remote layout so concurrent sensor
-        # runs never overwrite each other's year files before upload.
-        existing = load_remote_year(dataset, sensor, year)
-        merged = merge_hotspots(existing, chunk)
-        out = out_dir / f"sensor={sensor}" / f"year={year}.parquet"
-        points_to_geoparquet(merged, out)
-        results[year] = (len(chunk), len(merged))
-        if not dry_run:
-            api.upload_file(
-                path_or_fileobj=str(out),
-                path_in_repo=history_path(sensor, year),
-                repo_id=dataset,
-                repo_type="dataset",
-                commit_message=f"firms history {year}: +{len(chunk)} rows -> {len(merged)} total",
-            )
+    cursor = start
+    while cursor <= end:
+        year = cursor.year
+        year_end = min(end, date_cls(year, 12, 31))
+        span = (year_end - cursor).days + 1
+        # Checkpoint per year: fetch -> merge -> upload before moving on, so a
+        # late failure (API blip, runner loss) costs one year of fetches, not
+        # the whole span. Re-runs merge on hotspot_id and never double-count.
+        chunk = fetch_firms_range(
+            area, cursor.isoformat(), span, sensor=sensor, progress=progress
+        )
+        if len(chunk):
+            # Read the remote year even on dry runs so this path is always exercised.
+            existing = load_remote_year(dataset, sensor, year)
+            merged = merge_hotspots(existing, chunk)
+            out = out_dir / f"sensor={sensor}" / f"year={year}.parquet"
+            points_to_geoparquet(merged, out)
+            results[year] = (len(chunk), len(merged))
+            if not dry_run:
+                api.upload_file(
+                    path_or_fileobj=str(out),
+                    path_in_repo=history_path(sensor, year),
+                    repo_id=dataset,
+                    repo_type="dataset",
+                    commit_message=f"firms history {year}: +{len(chunk)} rows -> {len(merged)} total",
+                )
+        cursor = year_end + timedelta(days=1)
     return results
 
 
