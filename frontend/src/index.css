@@ -119,3 +119,56 @@ table,
   border-radius: 2px;
   background: #d6b65a;
 }
+
+
+/* MapLibre popups -------------------------------------------------------------
+   MapLibre's bubble ships as `background:#fff` with no `color`, so popup text
+   inherited the app's dark-theme ink (#f3f1ea) and rendered at ~1.1:1 contrast -
+   effectively invisible on the white bubble (any asset or polygon card on the
+   map). Pin the bubble to the app surface and the ink to the app text colour, and
+   restyle the arrow and close button so they belong to the same surface.
+
+   The selectors carry an extra `.maplibregl-popup` level on purpose: it makes them
+   win over maplibre-gl.css regardless of which stylesheet the bundler emits last,
+   without reaching for !important. */
+.maplibregl-popup .maplibregl-popup-content {
+  background: #0e1524;
+  color: #f3f1ea;
+  border: 1px solid rgba(243, 241, 234, 0.14);
+  border-radius: 10px;
+  padding: 12px 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+}
+
+/* the arrow is a CSS triangle whose coloured side depends on the anchor */
+.maplibregl-popup .maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-popup .maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-popup .maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: #0e1524;
+}
+
+.maplibregl-popup .maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-popup .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-popup .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: #0e1524;
+}
+
+.maplibregl-popup .maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: #0e1524;
+}
+
+.maplibregl-popup .maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: #0e1524;
+}
+
+.maplibregl-popup .maplibregl-popup-close-button {
+  color: #f3f1ea;
+  font-size: 16px;
+  padding: 2px 6px;
+  border-radius: 0 10px 0 10px;
+}
+
+.maplibregl-popup .maplibregl-popup-close-button:hover {
+  background-color: rgba(243, 241, 234, 0.12);
+  color: #f1d77a;
+}
