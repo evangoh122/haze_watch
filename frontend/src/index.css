@@ -1,0 +1,121 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base look from the RAG Workbench: black canvas, gold accents, tabular numbers. */
+html {
+  color-scheme: dark;
+  background-color: #000000;
+}
+
+body {
+  background: #000000;
+  color: #f3f1ea;
+  font-family: "Geist", "Segoe UI Variable", "SF Pro Display", system-ui, sans-serif;
+  letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+table,
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(214, 182, 90, 0.28);
+  border-radius: 3px;
+}
+
+::selection {
+  background: #d6b65a;
+  color: #090a0c;
+}
+
+:where(button, a, input, select, textarea, summary, [role="button"]):focus-visible {
+  outline: 2px solid #d6b65a;
+  outline-offset: 2px;
+}
+
+/* Workbench component classes (subset ported for consistency). */
+
+.eyebrow,
+.editorial-kicker {
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: 1rem;
+  color: #f1d77a;
+}
+
+.section-heading {
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #f8f6ef 0%, #f1d77a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, rgba(214, 182, 90, 0.08) 0%, rgba(17, 19, 23, 0.96) 70%);
+  border: 1px solid #32363d;
+  border-radius: 12px;
+  transition: border-color 0.2s;
+}
+.stat-card:hover {
+  border-color: rgba(214, 182, 90, 0.3);
+}
+
+.fintech-card {
+  background: #181b20;
+  border: 1px solid #32363d;
+  border-radius: 12px;
+  transition: border-color 0.16s ease, background-color 0.16s ease;
+}
+.fintech-card:hover {
+  border-color: #3a4250;
+  background: #1a1f28;
+}
+
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.5rem;
+  padding: 0.55rem 0.75rem 0.55rem 0.875rem;
+  border-radius: 8px;
+  font-size: 0.8375rem;
+  font-weight: 500;
+  color: #b8bdc5;
+  border: 1px solid transparent;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+.nav-item:hover {
+  color: #f3f1ea;
+  background: #1d222c;
+}
+.nav-item.active {
+  background: rgba(214, 182, 90, 0.14);
+  border-color: rgba(214, 182, 90, 0.22);
+  color: #f1d77a;
+}
+.nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: -0.25rem;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  width: 2px;
+  border-radius: 2px;
+  background: #d6b65a;
+}
