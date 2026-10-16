@@ -16,7 +16,9 @@ import { DisclaimerFooter } from '../components/Disclaimer';
 
 // The app lives on the portfolio domain at /haze-watch (Cloudflare Worker ->
 // app container, per deploy/cloudflare). No .hf.space host appears anywhere.
-const APP_URL = 'https://evangoh.com/haze-watch';
+// www is the canonical host: the apex (evangoh.com) returns a 522 over HTTPS,
+// so the link must not point at it.
+const APP_URL = 'https://www.evangoh.com/haze-watch';
 
 export default function HazeWatch() {
   const navigate = useNavigate();
@@ -365,7 +367,7 @@ export default function HazeWatch() {
               <div className="text-[11px] text-secondary/70 mt-1">hazard horizons</div>
             </div>
             <div className="rounded-2xl border border-border/60 bg-surface/60 p-5 text-center">
-              <div className="text-2xl font-mono font-semibold text-accent-bright">68</div>
+              <div className="text-2xl font-mono font-semibold text-accent-bright">75</div>
               <div className="text-[11px] text-secondary/70 mt-1">pipeline tests</div>
             </div>
           </div>

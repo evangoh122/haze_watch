@@ -5,6 +5,11 @@ import { useNavigate } from 'react-router-dom';
 import CoachMarks, { useTour } from '../components/CoachMarks';
 import { LANDING_TOUR, LANDING_TOUR_KEY } from '../components/tourSteps';
 import { DisclaimerFooter } from '../components/Disclaimer';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import type { SwiperClass } from 'swiper/react';
+import { A11y, Keyboard, Navigation } from 'swiper/modules';
+import 'swiper/css';
+import 'swiper/css/a11y';
 
 const LinkedinIcon = ({ size = 20 }: { size?: number }) => (
   <svg
@@ -31,7 +36,8 @@ const GithubIcon = ({ size = 20 }: { size?: number }) => (
 
 export default function PortfolioHome() {
   const navigate = useNavigate();
-  const [projectSlide, setProjectSlide] = useState(0);
+  const [swiper, setSwiper] = useState<SwiperClass | null>(null);
+  const [activeProject, setActiveProject] = useState(0);
   const landingTour = useTour(LANDING_TOUR_KEY);
   const activateCardOnKeyDown = (event: KeyboardEvent<HTMLDivElement>, action: () => void) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -177,18 +183,34 @@ export default function PortfolioHome() {
           </div>
 
           <div className="relative max-w-5xl">
-            <div className="overflow-hidden">
-              <div
-                className="flex transition-transform duration-500 ease-out"
-                style={{ transform: `translateX(-${projectSlide * 100}%)` }}
-              >
-                <div className="w-full shrink-0">
+            <Swiper
+              modules={[A11y, Keyboard, Navigation]}
+              slidesPerView={1}
+              spaceBetween={0}
+              rewind
+              watchSlidesProgress
+              keyboard={{ enabled: true }}
+              a11y={{
+                enabled: true,
+                containerMessage: 'Selected work',
+                containerRoleDescriptionMessage: 'carousel',
+                slideRole: 'group',
+              }}
+              navigation={{ prevEl: '.haze-proj-prev', nextEl: '.haze-proj-next' }}
+              onSwiper={setSwiper}
+              onSlideChange={(instance) => setActiveProject(instance.activeIndex)}
+              className="overflow-hidden"
+            >
+              <SwiperSlide>
+                {({ isActive }) => (
             <div
               data-tour="project-card"
               onClick={() => navigate('/projects/rag-workbench')}
               onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/projects/rag-workbench'))}
               role="button"
-              tabIndex={0}
+              tabIndex={isActive ? 0 : -1}
+              aria-hidden={!isActive}
+              inert={!isActive}
               className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
             >
               <div className="absolute top-0 right-0 w-40 h-40 bg-accent/10 rounded-full blur-3xl group-hover:bg-accent/15 transition-colors pointer-events-none" />
@@ -267,15 +289,19 @@ export default function PortfolioHome() {
                 </span>
               </div>
             </div>
-              </div>
+                )}
+              </SwiperSlide>
 
-              <div className="w-full shrink-0">
+              <SwiperSlide>
+                {({ isActive }) => (
             <div
               data-tour="project-card"
               onClick={() => navigate('/projects/haze-watch')}
               onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/projects/haze-watch'))}
               role="button"
-              tabIndex={0}
+              tabIndex={isActive ? 0 : -1}
+              aria-hidden={!isActive}
+              inert={!isActive}
               className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
             >
               <div className="absolute top-0 right-0 w-40 h-40 bg-accent/10 rounded-full blur-3xl group-hover:bg-accent/15 transition-colors pointer-events-none" />
@@ -312,7 +338,7 @@ export default function PortfolioHome() {
                       <div className="text-[10px] text-secondary/70">hazard horizons</div>
                     </div>
                     <div className="bg-white/[0.035] border border-white/[0.06] rounded-lg p-3">
-                      <div className="text-sm font-mono font-semibold text-accent-bright">68</div>
+                      <div className="text-sm font-mono font-semibold text-accent-bright">75</div>
                       <div className="text-[10px] text-secondary/70">pipeline tests</div>
                     </div>
                   </div>
@@ -354,15 +380,14 @@ export default function PortfolioHome() {
                 </span>
               </div>
             </div>
-              </div>
-            </div>
-          </div>
+                )}
+              </SwiperSlide>
+            </Swiper>
           <div className="mt-6 flex items-center justify-center gap-4" role="group" aria-label="Project carousel">
             <button
               type="button"
               aria-label="Previous project"
-              onClick={() => setProjectSlide((s) => (s + 1) % 2)}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-surface-elevated/40 text-secondary transition-colors hover:border-accent/50 hover:text-primary cursor-pointer"
+              className="haze-proj-prev flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-surface-elevated/40 text-secondary transition-colors hover:border-accent/50 hover:text-primary cursor-pointer"
             >
               ‹
             </button>
@@ -372,17 +397,16 @@ export default function PortfolioHome() {
                   key={i}
                   type="button"
                   aria-label={`Show project ${i + 1}`}
-                  aria-current={projectSlide === i}
-                  onClick={() => setProjectSlide(i)}
-                  className={`h-2 rounded-full transition-all duration-200 cursor-pointer ${projectSlide === i ? 'w-6 bg-accent' : 'w-2 bg-border hover:bg-secondary'}`}
+                  aria-current={activeProject === i}
+                  onClick={() => swiper?.slideTo(i)}
+                  className={`h-2 rounded-full transition-all duration-200 cursor-pointer ${activeProject === i ? 'w-6 bg-accent' : 'w-2 bg-border hover:bg-secondary'}`}
                 />
               ))}
             </div>
             <button
               type="button"
               aria-label="Next project"
-              onClick={() => setProjectSlide((s) => (s + 1) % 2)}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-surface-elevated/40 text-secondary transition-colors hover:border-accent/50 hover:text-primary cursor-pointer"
+              className="haze-proj-next flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-surface-elevated/40 text-secondary transition-colors hover:border-accent/50 hover:text-primary cursor-pointer"
             >
               ›
             </button>

@@ -2,8 +2,10 @@
 
 Replaces the "Enterprise infrastructure / Market data architecture notes"
 (Blueprint) card with the Haze Watch card and converts the two project cards to
-a CAROUSEL (one card per view, sliding track with prev/next buttons and dot
-indicators, keyboard accessible with aria labels). Output (NOT uploaded here):
+a SWIPER carousel (swiper/react, one card per view, prev/next buttons and dot
+indicators, ArrowLeft/ArrowRight, swipe on touch). The inactive slide is marked
+``inert`` + ``aria-hidden`` via SwiperSlide's render function so a keyboard user
+cannot tab into - or activate - the clipped card. Output (NOT uploaded here):
 
   deploy/site-update/PortfolioHome.tsx   full edited file
   deploy/site-update/PortfolioHome.patch unified diff against the live version
@@ -15,7 +17,7 @@ The source is the LIVE PortfolioHome.tsx from the evangoh.com site repo
 (egoh33/Auditable-Filing-QA). Pass --source, or set PORTFOLIO_HOME_SRC.
 
 Stats shown on the card are project-verified facts only (300 real concession
-polygons from the BNPB/GFW sample run, 24-72h forecast horizons, 68 pipeline
+polygons from the BNPB/GFW sample run, 24-72h forecast horizons, 75 pipeline
 tests measured via `uv run pytest pipelines/tests`). No invented metrics, per
 the portfolio's own disclaimer rules.
 """
@@ -37,7 +39,9 @@ CARD = """            <div
               onClick={() => navigate('/projects/haze-watch')}
               onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/projects/haze-watch'))}
               role="button"
-              tabIndex={0}
+              tabIndex={isActive ? 0 : -1}
+              aria-hidden={!isActive}
+              inert={!isActive}
               className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
             >
               <div className="absolute top-0 right-0 w-40 h-40 bg-accent/10 rounded-full blur-3xl group-hover:bg-accent/15 transition-colors pointer-events-none" />
@@ -74,7 +78,7 @@ CARD = """            <div
                       <div className="text-[10px] text-secondary/70">hazard horizons</div>
                     </div>
                     <div className="bg-white/[0.035] border border-white/[0.06] rounded-lg p-3">
-                      <div className="text-sm font-mono font-semibold text-accent-bright">68</div>
+                      <div className="text-sm font-mono font-semibold text-accent-bright">75</div>
                       <div className="text-[10px] text-secondary/70">pipeline tests</div>
                     </div>
                   </div>
@@ -118,12 +122,26 @@ CARD = """            <div
             </div>"""
 
 CAROUSEL_OPEN = """          <div className="relative max-w-5xl">
-            <div className="overflow-hidden">
-              <div
-                className="flex transition-transform duration-500 ease-out"
-                style={{ transform: `translateX(-${projectSlide * 100}%)` }}
-              >
-                <div className="w-full shrink-0">"""
+            <Swiper
+              modules={[A11y, Keyboard, Navigation]}
+              slidesPerView={1}
+              spaceBetween={0}
+              rewind
+              watchSlidesProgress
+              keyboard={{ enabled: true }}
+              a11y={{
+                enabled: true,
+                containerMessage: 'Selected work',
+                containerRoleDescriptionMessage: 'carousel',
+                slideRole: 'group',
+              }}
+              navigation={{ prevEl: '.haze-proj-prev', nextEl: '.haze-proj-next' }}
+              onSwiper={setSwiper}
+              onSlideChange={(instance) => setActiveProject(instance.activeIndex)}
+              className="overflow-hidden"
+            >
+              <SwiperSlide>
+                {({ isActive }) => ("""
 
 SLIDE_BOUNDARY_OLD = """            </div>
 
@@ -131,22 +149,23 @@ SLIDE_BOUNDARY_OLD = """            </div>
               onClick={() => navigate('/rag', { state: { initialView: 'stocks' } })}"""
 
 SLIDE_BOUNDARY_NEW = """            </div>
-              </div>
+                )}
+              </SwiperSlide>
 
-              <div className="w-full shrink-0">
+              <SwiperSlide>
+                {({ isActive }) => (
             <div
               onClick={() => navigate('/rag', { state: { initialView: 'stocks' } })}"""
 
 CAROUSEL_TAIL = """            </div>
-              </div>
-            </div>
-          </div>
+                )}
+              </SwiperSlide>
+            </Swiper>
           <div className="mt-6 flex items-center justify-center gap-4" role="group" aria-label="Project carousel">
             <button
               type="button"
               aria-label="Previous project"
-              onClick={() => setProjectSlide((s) => (s + 1) % 2)}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-surface-elevated/40 text-secondary transition-colors hover:border-accent/50 hover:text-primary cursor-pointer"
+              className="haze-proj-prev flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-surface-elevated/40 text-secondary transition-colors hover:border-accent/50 hover:text-primary cursor-pointer"
             >
               ‹
             </button>
@@ -156,17 +175,16 @@ CAROUSEL_TAIL = """            </div>
                   key={i}
                   type="button"
                   aria-label={`Show project ${i + 1}`}
-                  aria-current={projectSlide === i}
-                  onClick={() => setProjectSlide(i)}
-                  className={`h-2 rounded-full transition-all duration-200 cursor-pointer ${projectSlide === i ? 'w-6 bg-accent' : 'w-2 bg-border hover:bg-secondary'}`}
+                  aria-current={activeProject === i}
+                  onClick={() => swiper?.slideTo(i)}
+                  className={`h-2 rounded-full transition-all duration-200 cursor-pointer ${activeProject === i ? 'w-6 bg-accent' : 'w-2 bg-border hover:bg-secondary'}`}
                 />
               ))}
             </div>
             <button
               type="button"
               aria-label="Next project"
-              onClick={() => setProjectSlide((s) => (s + 1) % 2)}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-surface-elevated/40 text-secondary transition-colors hover:border-accent/50 hover:text-primary cursor-pointer"
+              className="haze-proj-next flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-surface-elevated/40 text-secondary transition-colors hover:border-accent/50 hover:text-primary cursor-pointer"
             >
               ›
             </button>
@@ -192,11 +210,29 @@ def edit(source: Path, out_dir: Path) -> Path:
         old_react_import, "import { useState } from 'react';\n" + old_react_import
     )
 
-    # 2) carousel state
+    # 1b) Swiper drives the carousel; only the core + a11y stylesheets are pulled
+    #     in, so the bespoke Tailwind button/dot styling is unchanged.
+    disclaimer_import = "import { DisclaimerFooter } from '../components/Disclaimer';"
+    assert disclaimer_import in text, "DisclaimerFooter import not found"
+    text = text.replace(
+        disclaimer_import,
+        disclaimer_import
+        + "\nimport { Swiper, SwiperSlide } from 'swiper/react';"
+        + "\nimport type { SwiperClass } from 'swiper/react';"
+        + "\nimport { A11y, Keyboard, Navigation } from 'swiper/modules';"
+        + "\nimport 'swiper/css';"
+        + "\nimport 'swiper/css/a11y';",
+    )
+
+    # 2) carousel state: the instance for dot navigation + the active index for
+    #    aria-current (Swiper itself does not re-render React on slide change)
     old_nav = "  const navigate = useNavigate();"
     assert old_nav in text, "navigate declaration not found"
     text = text.replace(
-        old_nav, old_nav + "\n  const [projectSlide, setProjectSlide] = useState(0);"
+        old_nav,
+        old_nav
+        + "\n  const [swiper, setSwiper] = useState<SwiperClass | null>(null);"
+        + "\n  const [activeProject, setActiveProject] = useState(0);",
     )
 
     # 3) accessible names below sm: the visible labels hide on small screens, so
@@ -238,10 +274,30 @@ def edit(source: Path, out_dir: Path) -> Path:
     assert rag_links == 2, f"expected 2 RAG card links, found {rag_links}"
     text = text.replace("navigate('/rag-overview')", "navigate('/projects/rag-workbench')")
 
-    # 5) grid -> carousel shell (outer > overflow-hidden > sliding track > slide 1)
+    # 5) grid -> carousel shell (outer > Swiper > slide 1 > render prop)
     old_grid = '          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.12fr)_minmax(280px,0.88fr)] gap-5 lg:gap-6 max-w-5xl">'
     assert old_grid in text, "projects grid not found"
     text = text.replace(old_grid, CAROUSEL_OPEN)
+
+    # 5b) the first card is a slide now: it is interactive only while active, so
+    #     its clipped state is inert and untabbable (same treatment as the Haze
+    #     card below). This is the accessibility fix the Swiper migration brings.
+    rag_tag_old = (
+        "              onClick={() => navigate('/projects/rag-workbench')}\n"
+        "              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/projects/rag-workbench'))}\n"
+        '              role="button"\n'
+        "              tabIndex={0}"
+    )
+    rag_tag_new = (
+        "              onClick={() => navigate('/projects/rag-workbench')}\n"
+        "              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/projects/rag-workbench'))}\n"
+        '              role="button"\n'
+        "              tabIndex={isActive ? 0 : -1}\n"
+        "              aria-hidden={!isActive}\n"
+        "              inert={!isActive}"
+    )
+    assert rag_tag_old in text, "RAG card tag not found"
+    text = text.replace(rag_tag_old, rag_tag_new)
 
     # 6) close slide 1 / open slide 2 between the two cards
     assert SLIDE_BOUNDARY_OLD in text, "card boundary not found"
@@ -283,7 +339,13 @@ def edit(source: Path, out_dir: Path) -> Path:
     print(f"patch written: {out_dir / 'PortfolioHome.patch'} ({len(patch.splitlines())} lines)")
     print(f"Haze Watch cards: {text.count('Geospatial climate risk for lenders')}")
     print(f"Enterprise cards left: {text.count('Market data architecture notes')}")
-    print(f"carousel markers: slides={text.count('w-full shrink-0')}, dots={text.count('Show project')}")
+    print(
+        "carousel markers: "
+        f"SwiperSlide={text.count('<SwiperSlide>')}, "
+        f"dots={text.count('Show project')}, "
+        f"inert={text.count('inert={!isActive}')}, "
+        f"arrowKeys={text.count('.haze-proj-next')}"
+    )
     return out_dir / "PortfolioHome.tsx"
 
 
