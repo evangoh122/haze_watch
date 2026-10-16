@@ -27,9 +27,21 @@ PRIVATE_ALLOWED = {"private/companies/_template.yaml"}
 
 
 def _is_private_data(path: str) -> bool:
+    """Private research data anywhere under private/, not just two subdirs.
+
+    Only the explicit allowlist (templates, docs, tests, code) may be tracked.
+    """
+    return path.startswith("private/") and not _is_private_allowed(path)
+
+
+def _is_private_allowed(path: str) -> bool:
     return (
-        path.startswith("private/companies/") and path not in PRIVATE_ALLOWED
-    ) or path.startswith("private/out/")
+        path in PRIVATE_ALLOWED
+        or path.startswith("private/tests/")
+        or path == "private/README.md"
+        or path == "private/conftest.py"
+        or path.endswith((".gitkeep", ".py"))  # code is fine; data files are not
+    )
 
 
 def _is_allowed(path: str) -> bool:

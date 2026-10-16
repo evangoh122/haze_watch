@@ -17,9 +17,17 @@ export default function FireForecast() {
 
   useEffect(() => {
     setError(null);
+    let cancelled = false;
     getForecasts(horizon, 25)
-      .then(setData)
-      .catch(() => setError("Forecast dataset not available. Run the ingestion pipeline first."));
+      .then((response) => {
+        if (!cancelled) setData(response);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Forecast dataset not available. Run the ingestion pipeline first.");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [horizon]);
 
   return (

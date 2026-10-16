@@ -1,4 +1,5 @@
 ﻿import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import CalculationTrace from "../components/common/CalculationTrace";
 import KpiCard from "../components/common/KpiCard";
 import SyntheticDataBadge from "../components/common/SyntheticDataBadge";
@@ -111,8 +112,9 @@ export default function BankingDemo() {
               title="Credit ratios (x)"
               unit="x"
               data={[
-                { label: "Net debt/EBITDA", baseline: baseline.netDebtToEbitda ?? 0, stressed: result.stressedMetrics.netDebtToEbitda ?? 0 },
-                { label: "EBITDA/interest", baseline: baseline.interestCoverage ?? 0, stressed: result.stressedMetrics.interestCoverage ?? 0 },
+                // Non-meaningful ratios stay null (chart gap), never plotted as 0.
+                { label: "Net debt/EBITDA", baseline: baseline.netDebtToEbitda, stressed: result.stressedMetrics.netDebtToEbitda },
+                { label: "EBITDA/interest", baseline: baseline.interestCoverage, stressed: result.stressedMetrics.interestCoverage },
                 { label: "Current ratio", baseline: baseline.currentRatio, stressed: result.stressedMetrics.currentRatio },
               ]}
             />
@@ -135,9 +137,9 @@ export default function BankingDemo() {
             Scenario outputs are hypothetical illustrations computed from synthetic statements.
             Monitoring thresholds are illustrative and not any institution's policy. Hazard scores
             are not validated probabilities of default. See the{" "}
-            <a className="text-blue-700 underline" href="/governance">
+            <Link className="text-accent underline" to="/provenance">
               governance notes
-            </a>
+            </Link>
             .
           </p>
         </div>

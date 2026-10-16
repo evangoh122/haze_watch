@@ -15,11 +15,16 @@ on:
       - "pyproject.toml"
       - "uv.lock"
 
+permissions:
+  contents: read
+
 jobs:
   python:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@v5
       - name: Install workspace
         run: uv sync --all-packages
