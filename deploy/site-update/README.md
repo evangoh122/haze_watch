@@ -25,10 +25,15 @@ The card is sized and styled to the RAG Workbench card's system so both read as
 one design. Like the RAG card, it navigates internally: clicking the card (or
 Enter/Space) opens the **`/haze-watch` case-study page**.
 
-The `/haze-watch` page now **embeds the live app in an iframe** ("The app, right
-here.") with a faux browser bar and an "Open full screen" escape hatch, so the
-app sits inside evangoh.com instead of navigating away to the HF Space origin
-(verified embeddable: the Space sets no `X-Frame-Options`).
+The `/haze-watch` page is reworded around the project's **historical-data
+focus** and marks the work as **in progress**: a pulsing "historical backfill
+in progress" status chip, a "Historical data - in progress" section with the
+true source depths (FIRMS MODIS 2000+/VIIRS 2012+, ERA5 1940+, CAMS aerosol
+2022+ with the Earthdata options noted) and a "work in progress" note that the
+figures reflect the current sample run, not the finished archive. Per review,
+the page has **no direct `.hf.space` host and no iframe** - the CTA opens the
+Hugging Face brand page, to be swapped to the self-hosted origin once the
+consolidated container ships.
 
 The edit also carries three small fixes to the existing page: aria-labels on
 the LinkedIn/Contact header links (their visible labels hide below `sm`, unlike
@@ -44,7 +49,7 @@ structure and claim discipline (300 real concession polygons, 24-72h horizons,
 baselines; detections are not burned area).
 
 Card claims are project-verified facts only: 300 real concession polygons
-(BNPB/GFW sample run), 24-72h hazard horizons, 46 pipeline tests (measured via
+(BNPB/GFW sample run), 24-72h hazard horizons, 68 pipeline tests (measured via
 `uv run pytest pipelines/tests`). No invented metrics.
 
 ## Review checklist (for DeepSeek / human)

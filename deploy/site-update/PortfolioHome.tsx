@@ -312,7 +312,7 @@ export default function PortfolioHome() {
                       <div className="text-[10px] text-secondary/70">hazard horizons</div>
                     </div>
                     <div className="bg-white/[0.035] border border-white/[0.06] rounded-lg p-3">
-                      <div className="text-sm font-mono font-semibold text-accent-bright">46</div>
+                      <div className="text-sm font-mono font-semibold text-accent-bright">68</div>
                       <div className="text-[10px] text-secondary/70">pipeline tests</div>
                     </div>
                   </div>

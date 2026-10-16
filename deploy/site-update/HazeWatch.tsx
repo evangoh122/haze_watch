@@ -14,13 +14,15 @@ import {
 } from 'lucide-react';
 import { DisclaimerFooter } from '../components/Disclaimer';
 
-const APP_URL = 'https://egoh33-haze-watch.hf.space';
+// Interim target: the Hugging Face brand page (no direct .hf.space host, no
+// iframe). Swap to the self-hosted origin once the consolidated container ships.
+const APP_URL = 'https://huggingface.co/spaces/egoh33/haze-watch';
 
 export default function HazeWatch() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = 'Haze Watch - Geospatial climate risk for lenders';
+    document.title = 'Haze Watch - Historical fire, weather and haze for lenders';
   }, []);
 
   return (
@@ -47,103 +49,155 @@ export default function HazeWatch() {
               <span className="editorial-rule" />
               <span className="editorial-kicker">Haze Watch</span>
             </div>
-            <div className="flex items-center gap-3 mb-5">
+            <div className="flex items-center gap-3 mb-5 flex-wrap">
               <div className="p-2.5 bg-accent/8 border border-accent/15 rounded-xl text-accent">
                 <Flame size={24} />
               </div>
               <p className="text-xs font-mono text-accent-bright m-0">Geospatial climate risk for lenders</p>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-mono font-semibold text-amber-500">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 status-pulse" />
+                historical backfill in progress
+              </span>
             </div>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-semibold tracking-tight leading-[0.98] text-primary m-0 max-w-3xl text-balance">
-              Environmental hazard, traced to borrower cash flow.
+              Twenty-five years of fire, mapped to borrower cash flow.
             </h1>
             <p className="text-secondary text-base leading-8 font-light mt-7 max-w-3xl text-pretty">
               Haze Watch joins real NASA fire observations and reanalysis weather to concession
               geography, then runs auditable credit stress scenarios over the same numbers a credit
-              memo would cite - with every dataset carrying its provenance and licence.
+              memo would cite. The project is mid-backfill: a 25-year detection record (MODIS since
+              2000, VIIRS since 2012) and 85 years of reanalysis weather (ERA5, 1940 onward) are
+              being assembled into a versioned GeoParquet history store, so the hazard-to-cash-flow
+              link can be studied across the big El Niño fire years - 2015, 2019, 2023-24.
             </p>
             <div className="flex flex-wrap gap-4 mt-8">
-              <a
-                href="#live-app"
-                className="fintech-button px-5 py-2.5 group inline-flex items-center gap-2"
+              <button
+                onClick={() => window.open(APP_URL, '_blank', 'noopener,noreferrer')}
+                className="fintech-button px-5 py-2.5 group"
               >
                 <Play size={16} className="fill-white" />
-                Try the app here
-              </a>
+                Open the app
+              </button>
               <a
-                href="#how-it-works"
+                href="#historical-data"
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border/80 hover:bg-surface-elevated/40 text-primary font-semibold transition-all duration-200 cursor-pointer"
               >
                 <Layers size={16} />
-                How it works
+                Historical data
               </a>
             </div>
           </div>
 
           <aside className="product-glass-preview rounded-2xl p-5 relative overflow-hidden">
             <div className="absolute -right-10 -top-10 w-36 h-36 bg-accent/15 blur-3xl" />
-            <div className="text-[11px] font-mono text-secondary mb-4">hazard readout</div>
+            <div className="text-[11px] font-mono text-secondary mb-4">historical panel</div>
             <div className="space-y-3">
               <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-3">
-                <div className="text-xs text-primary font-semibold mb-2">Concession polygon</div>
+                <div className="flex items-center justify-between text-[10px] font-mono text-secondary mb-2">
+                  <span>fire detections</span>
+                  <span className="text-amber-500">2000 -&gt; today</span>
+                </div>
                 <div className="h-2 w-5/6 rounded bg-white/10 mb-2" />
                 <div className="h-2 w-2/3 rounded bg-white/8" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl border border-accent/15 bg-accent/8 p-3">
-                  <div className="text-[10px] text-accent-bright font-mono mb-3">detections 30d</div>
+                  <div className="text-[10px] text-accent-bright font-mono mb-3">weather 1940 -&gt;</div>
                   <div className="h-8 rounded bg-background/50" />
                 </div>
                 <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-3">
-                  <div className="text-[10px] text-secondary font-mono mb-3">weather</div>
+                  <div className="text-[10px] text-secondary font-mono mb-3">haze 2022 -&gt;</div>
                   <div className="h-8 rounded bg-background/50" />
                 </div>
               </div>
               <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-3">
                 <div className="flex items-center justify-between text-[10px] font-mono text-secondary">
-                  <span>hazard baseline</span>
-                  <span className="text-accent-bright">labeled</span>
+                  <span>archive status</span>
+                  <span className="text-amber-500">backfilling</span>
                 </div>
               </div>
             </div>
           </aside>
         </section>
 
-        <section id="live-app" className="scroll-mt-20 animate-in fade-in slide-in-from-bottom-4 duration-450">
-          <div className="flex items-center gap-3 mb-7">
+        <section id="historical-data" className="scroll-mt-20 animate-in fade-in slide-in-from-bottom-4 duration-450">
+          <div className="flex items-center gap-3 mb-3">
             <span className="editorial-rule" />
             <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-primary m-0">
-              The app, right here.
+              Historical data - in progress.
             </h2>
           </div>
-          <div className="rounded-2xl border border-border/60 bg-surface/40 overflow-hidden">
-            <div className="flex items-center justify-between gap-3 border-b border-border/40 px-4 py-2.5">
-              <div className="flex items-center gap-2 font-mono text-[11px] text-secondary">
-                <span className="w-2 h-2 rounded-full bg-accent" />
-                egoh33-haze-watch.hf.space
+          <p className="text-secondary text-base leading-8 font-light max-w-3xl mb-8">
+            The work right now is the record itself: pulling the full detection history into a
+            versioned GeoParquet store (per sensor, per year, deduplicated), so every later claim
+            rests on the same evidence. Sources and their true depths:
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="glass-card rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <Flame size={15} className="text-accent-bright" />
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-mono text-amber-500">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 status-pulse" />
+                  backfill running
+                </span>
               </div>
-              <button
-                type="button"
-                onClick={() => window.open(APP_URL, '_blank', 'noopener,noreferrer')}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border/80 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:border-accent/50 hover:bg-surface-elevated/40 cursor-pointer"
-              >
-                Open full screen
-                <ArrowLeft size={13} className="rotate-180" />
-              </button>
-            </div>
-            <iframe
-              src={APP_URL}
-              title="Haze Watch live app"
-              loading="lazy"
-              className="h-[680px] w-full border-0 bg-background"
-            >
-              <p className="p-6 text-sm text-secondary">
-                The app cannot be embedded here.{' '}
-                <a href={APP_URL} target="_blank" rel="noopener noreferrer" className="text-accent">
-                  Open it in a new tab
-                </a>
-                .
+              <h4 className="text-sm font-semibold text-primary mb-2">Fire detections (NASA FIRMS)</h4>
+              <p className="text-[11px] text-secondary/80 leading-relaxed m-0">
+                MODIS from November 2000 (Terra), VIIRS from 2012 (S-NPP), 2020 (NOAA-20) and 2024
+                (NOAA-21). Being merged into per-sensor, per-year GeoParquet year files with
+                detection-level provenance.
               </p>
-            </iframe>
+            </div>
+            <div className="glass-card rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <Wind size={15} className="text-accent-bright" />
+                <span className="text-[9px] font-mono text-secondary/60 border border-border/60 rounded-full px-2 py-0.5">available</span>
+              </div>
+              <h4 className="text-sm font-semibold text-primary mb-2">Weather (ERA5 reanalysis)</h4>
+              <p className="text-[11px] text-secondary/80 leading-relaxed m-0">
+                Temperature, rainfall, humidity and wind from 1940 onward - deep enough to cover
+                every modern El Niño drought episode behind the major fire years.
+              </p>
+            </div>
+            <div className="glass-card rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <Database size={15} className="text-accent-bright" />
+                <span className="text-[9px] font-mono text-secondary/60 border border-border/60 rounded-full px-2 py-0.5">partial depth</span>
+              </div>
+              <h4 className="text-sm font-semibold text-primary mb-2">Haze indicators (CAMS aerosol)</h4>
+              <p className="text-[11px] text-secondary/80 leading-relaxed m-0">
+                Aerosol optical depth and particulate matter from 2022 onward via the current route;
+                deeper haze history (OMPS Aerosol Index 2012+, MODIS MAIAC AOD 2000+) needs NASA
+                Earthdata credentials and is queued behind the fire backfill.
+              </p>
+            </div>
+            <div className="glass-card rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <AlertTriangle size={15} className="text-accent-bright" />
+                <span className="text-[9px] font-mono text-secondary/60 border border-border/60 rounded-full px-2 py-0.5">study design</span>
+              </div>
+              <h4 className="text-sm font-semibold text-primary mb-2">Event years in scope</h4>
+              <p className="text-[11px] text-secondary/80 leading-relaxed m-0">
+                The 2015, 2019 and 2023-24 El Niño fire seasons are the anchor events for the
+                financial-impact study that follows the backfill - hazard panels first, borrower
+                modelling second.
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-5 mt-6">
+            <div className="flex items-center gap-2 text-amber-400 font-semibold mb-2 text-xs font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 status-pulse" />
+              work in progress
+            </div>
+            <p className="text-xs text-secondary/80 leading-relaxed m-0">
+              The 2000-to-today detection archive is being backfilled right now (chunked API
+              windows, merged per sensor and year). Figures elsewhere on this page - 300 real
+              concession polygons, 24-72h hazard horizons - reflect the current sample run, not
+              the finished archive. The modeling phase (historical financial data joined to the
+              hazard panel) starts once the backfill lands.
+            </p>
           </div>
         </section>
 
@@ -311,7 +365,7 @@ export default function HazeWatch() {
               <div className="text-[11px] text-secondary/70 mt-1">hazard horizons</div>
             </div>
             <div className="rounded-2xl border border-border/60 bg-surface/60 p-5 text-center">
-              <div className="text-2xl font-mono font-semibold text-accent-bright">46</div>
+              <div className="text-2xl font-mono font-semibold text-accent-bright">68</div>
               <div className="text-[11px] text-secondary/70 mt-1">pipeline tests</div>
             </div>
           </div>
