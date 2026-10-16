@@ -2,7 +2,7 @@
 
 Three things run: a local dev stack (Docker Compose), the demo container
 (single image, currently hosted as a Hugging Face Space), and the Cloudflare
-routing that puts the demo at `evangoh.com/haze-watch`.
+routing that puts the demo at `www.evangoh.com/haze-watch`.
 
 ## Local development (supported)
 
@@ -45,18 +45,24 @@ Key points:
 - Currently deployed as the Hugging Face Space `egoh33/haze-watch` (public, no
   secrets → the deterministic data-grounded chat fallback answers).
 
-## Public routing: evangoh.com/haze-watch
+## Public routing: www.evangoh.com/haze-watch
 
 A Cloudflare Worker handles only the `/haze-watch*` route and proxies to the
 Space; the rest of the domain is untouched. Full steps, verification commands and
 cost notes are in `deploy/cloudflare/README.md`.
 
+`www.evangoh.com` is canonical — the apex `evangoh.com` returns **522** over
+HTTPS on every path (a Cloudflare->origin failure specific to that hostname;
+`www` reaches the same origin in ~0.3s). Link to `www` until the apex origin
+route is fixed.
+
 | Piece | Where |
 |---|---|
-| Route pattern | `evangoh.com/haze-watch*` (+ `www`) |
+| Route pattern | `www.evangoh.com/haze-watch*` (apex route kept as a fallback) |
 | Worker | `deploy/cloudflare/worker.js`, `wrangler.toml` |
 | Prefix handling | `deploy/hf-space/nginx.conf` (strips `/haze-watch`) |
 | Subpath build | `frontend/vite.config.ts` (`base`), `src/main.tsx` (router basename), `src/lib/api.ts` (API base) |
+| App link | portfolio `HazeWatch.tsx` `APP_URL` = `https://www.evangoh.com/haze-watch` |
 
 No Cloudflare or Hugging Face payment is required for this setup — the Worker
 free tier covers it.

@@ -1,14 +1,20 @@
-# Cloudflare routing: evangoh.com/haze-watch
+# Cloudflare routing: www.evangoh.com/haze-watch
 
-Serves the Haze Watch app at `https://evangoh.com/haze-watch` while the rest of
-the domain keeps serving the portfolio site.
+Serves the Haze Watch app at `https://www.evangoh.com/haze-watch` while the rest
+of the domain keeps serving the portfolio site.
+
+`www` is the canonical host, not the bare apex: as of 2026-10-16 the apex
+`evangoh.com` returns **522** over HTTPS on every path, because Cloudflare cannot
+complete its connection to the origin for that hostname. The same origin answers
+`www` in ~0.3s, so this is an apex-specific Cloudflare config problem, not an app
+or Hugging Face problem. Until it is fixed, point every link at `www`.
 
 ## How it works
 
 ```
-browser ──► evangoh.com/haze-watch/...            (Cloudflare, proxied)
+browser ──► www.evangoh.com/haze-watch/...        (Cloudflare, proxied)
                 │
-                │  Worker route: evangoh.com/haze-watch*
+                │  Worker route: www.evangoh.com/haze-watch*
                 ▼
          egoh33-haze-watch.hf.space/...           (HF Space, single container)
                 │  nginx strips /haze-watch
@@ -20,8 +26,8 @@ browser ──► evangoh.com/haze-watch/...            (Cloudflare, proxied)
   the domain is untouched** — the portfolio origin is unaffected.
 - The path is forwarded unchanged; the container's nginx owns the prefix
   (`deploy/hf-space/nginx.conf`).
-- Because the browser only talks to `evangoh.com`, the `*.hf.space` origin never
-  appears in the page, in links, or in devtools.
+- Because the browser only talks to `www.evangoh.com`, the `*.hf.space` origin
+  never appears in the page, in links, or in devtools.
 
 ## Prerequisites
 
@@ -39,12 +45,12 @@ npx wrangler login          # once
 npx wrangler deploy         # creates/updates the route from wrangler.toml
 ```
 
-Verify:
+Verify (use `www`; the apex 522s regardless of the Worker):
 
 ```bash
-curl -sI  https://evangoh.com/haze-watch/            | head -1   # 200
-curl -s   https://evangoh.com/haze-watch/api/v1/health            # {"status":"ok"}
-curl -sI  https://evangoh.com/                       | head -1   # portfolio, unchanged
+curl -sI  https://www.evangoh.com/haze-watch/         | head -1   # 200
+curl -s   https://www.evangoh.com/haze-watch/api/v1/health       # {"status":"ok"}
+curl -sI  https://www.evangoh.com/                    | head -1   # portfolio, unchanged
 ```
 
 ## Notes
@@ -56,3 +62,8 @@ curl -sI  https://evangoh.com/                       | head -1   # portfolio, un
 - **Local testing without Cloudflare:** run the container and hit it directly —
   `docker build -f deploy/hf-space/Dockerfile . && docker run -p 7860:7860 <img>`,
   then open `http://localhost:7860/haze-watch/`.
+- **Known issue — the Space's own root URL:** `nginx.conf` relies on a relative
+  redirect for `/` -> `/haze-watch/`, but nginx's `absolute_redirect` default is
+  `on`, so it emits `http://<host>:7860/haze-watch/`. Port 7860 is not reachable
+  from the internet, so a request to the Space root hangs. Fix: add
+  `absolute_redirect off;` to the `server` block in `deploy/hf-space/nginx.conf`.
