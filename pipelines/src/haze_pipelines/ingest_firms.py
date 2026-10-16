@@ -10,6 +10,7 @@ Real observations only: any fixture data must be generated via
 from __future__ import annotations
 
 import hashlib
+import time
 from pathlib import Path
 
 import httpx
@@ -166,6 +167,12 @@ def read_firms_csvs(
     return merged.drop_duplicates(subset=["hotspot_id"]).reset_index(drop=True)
 
 
+# FIRMS area API window limit per request (the API form documents 1-5 days;
+# larger DAY_RANGE values consume multiple transactions and are rejected by the
+# form). Longer spans are chunked by fetch_firms_range.
+MAX_DAYS_PER_REQUEST = 5
+
+
 def fetch_firms_area(
     area: str,
     days: int,
@@ -173,12 +180,17 @@ def fetch_firms_area(
     api_key: str | None = None,
     client: httpx.Client | None = None,
     sensor: str = "MODIS_NRT",
+    date: str | None = None,
 ) -> pd.DataFrame:
     """Fetch an area extract from the FIRMS CSV API (requires FIRMS_API_KEY).
 
     ``area`` is ``west,south,east,north`` (a WGS84 bounding box) and ``days`` the
-    trailing window (1-10). See https://firms.modaps.eosdis.nasa.gov/api/area/.
+    window length (1-5 per request). ``date`` (``YYYY-MM-DD``) anchors the window
+    at that day (returns DATE .. DATE+days-1); without it the API returns the
+    trailing window ending today. See https://firms.modaps.eosdis.nasa.gov/api/area/.
     """
+    from datetime import date as date_cls
+
     key = api_key if api_key is not None else settings.firms_api_key
     if not key:
         raise RuntimeError(
@@ -186,10 +198,17 @@ def fetch_firms_area(
             "HAZE_FIRMS_API_KEY) for automatic pulls, or place CSV exports in "
             "data/raw/firms/ and ingest without --from-api."
         )
-    if days < 1 or days > 10:
-        raise ValueError("FIRMS area API supports 1-10 days per request")
+    if days < 1 or days > MAX_DAYS_PER_REQUEST:
+        raise ValueError(
+            f"FIRMS area API supports 1-{MAX_DAYS_PER_REQUEST} days per request "
+            "(chunk longer spans with fetch_firms_range / --start-date --backfill-days)"
+        )
+    if date is not None:
+        date_cls.fromisoformat(date)  # raises ValueError on malformed dates
 
     url = f"https://firms.modaps.eosdis.nasa.gov/api/area/csv/{key}/{sensor}/{area}/{days}"
+    if date is not None:
+        url += f"/{date}"
     own_client = client is None
     client = client or httpx.Client(timeout=60.0)
     try:
@@ -206,6 +225,62 @@ def fetch_firms_area(
         source=f"NASA_FIRMS_{sensor}",
         available_lag_hours=settings.firms_availability_lag_hours,
     )
+
+
+def fetch_firms_range(
+    area: str,
+    start_date: str,
+    backfill_days: int,
+    *,
+    api_key: str | None = None,
+    client: httpx.Client | None = None,
+    sensor: str = "MODIS_NRT",
+    window_days: int = MAX_DAYS_PER_REQUEST,
+    sleep=time.sleep,
+    progress=None,
+) -> pd.DataFrame:
+    """Fetch a historical range by walking the area API in ``window_days`` chunks.
+
+    The area API takes ``DAY_RANGE`` + ``DATE`` (returns DATE..DATE+DAY_RANGE-1),
+    so a range is one request per window. Rows are deduplicated across windows on
+    ``hotspot_id`` (stable hash of source/lat/lon/time), so overlapping or retried
+    windows never double-count a detection. Gentle pacing between requests keeps
+    well inside the MAP_KEY quota (5,000 transactions / 10 min).
+    """
+    from datetime import date as date_cls
+    from datetime import timedelta
+
+    if backfill_days < 1:
+        raise ValueError("backfill_days must be >= 1")
+    if window_days < 1 or window_days > MAX_DAYS_PER_REQUEST:
+        raise ValueError(f"window_days must be 1-{MAX_DAYS_PER_REQUEST}")
+    start = date_cls.fromisoformat(start_date)
+
+    frames: list[pd.DataFrame] = []
+    offset = 0
+    while offset < backfill_days:
+        span = min(window_days, backfill_days - offset)
+        window_start = (start + timedelta(days=offset)).isoformat()
+        if progress is not None:
+            progress(f"firms window {window_start} +{span}d ({sensor})")
+        frames.append(
+            fetch_firms_area(
+                area,
+                span,
+                api_key=api_key,
+                client=client,
+                sensor=sensor,
+                date=window_start,
+            )
+        )
+        offset += span
+        if offset < backfill_days and sleep is not None:
+            sleep(0.25)
+
+    if not frames:
+        return pd.DataFrame()
+    merged = pd.concat(frames, ignore_index=True)
+    return merged.drop_duplicates(subset=["hotspot_id"]).reset_index(drop=True)
 
 
 def indonesia_bbox_check(df: pd.DataFrame) -> pd.Series:
@@ -225,23 +300,48 @@ def ingest_from_api(
     area: str | None = None,
     days: int = 3,
     sensor: str = "MODIS_NRT",
+    start_date: str | None = None,
+    backfill_days: int | None = None,
     settings_obj: Settings = settings,
     client: httpx.Client | None = None,
+    progress=None,
 ) -> tuple[pd.DataFrame, Path]:
-    """Automatic pull: fetch recent FIRMS detections and persist them.
+    """Automatic pull: fetch FIRMS detections and persist them.
 
     Requires a free FIRMS MAP_KEY (``FIRMS_API_KEY`` / ``HAZE_FIRMS_API_KEY``).
-    Defaults to the Indonesia bounding box and the trailing ``days`` window.
+    Trailing mode: the last ``days`` days (1-5). Historical mode: pass
+    ``start_date`` + ``backfill_days`` to walk ``[start_date, start_date+backfill_days)``
+    in <=5-day windows (``backfill_days`` alone = that many days ending today).
     Registered with treatment ``real`` - never ``synthetic-fixture``.
     """
+    from datetime import date as date_cls
+    from datetime import timedelta
+
     resolved_area = area or default_area()
-    df = fetch_firms_area(
-        resolved_area,
-        days,
-        api_key=settings_obj.firms_api_key,
-        client=client,
-        sensor=sensor,
-    )
+    if start_date is not None or backfill_days is not None:
+        if backfill_days is None:
+            raise ValueError("backfill_days is required with start_date")
+        if start_date is None:
+            start_date = (date_cls.today() - timedelta(days=backfill_days - 1)).isoformat()
+        df = fetch_firms_range(
+            resolved_area,
+            start_date,
+            backfill_days,
+            api_key=settings_obj.firms_api_key,
+            client=client,
+            sensor=sensor,
+            progress=progress,
+        )
+        window_desc = f"start={start_date}, backfill_days={backfill_days} (chunked <=5d windows)"
+    else:
+        df = fetch_firms_area(
+            resolved_area,
+            days,
+            api_key=settings_obj.firms_api_key,
+            client=client,
+            sensor=sensor,
+        )
+        window_desc = f"trailing days={days}"
 
     from .io import write_parquet
     from .provenance import register_dataset
@@ -250,13 +350,17 @@ def ingest_from_api(
     write_parquet(
         df,
         out_path,
-        extra_metadata={"dataset": "fire_hotspots", "source": f"NASA_FIRMS API ({sensor})"},
+        extra_metadata={
+            "dataset": "fire_hotspots",
+            "source": f"NASA_FIRMS API ({sensor})",
+            "processing": "NRT",
+        },
     )
     register_dataset(
         settings_obj.metadata_dir,
         dataset_id="fire_hotspots::nasa_firms",
         name="Active fire hotspots (NASA FIRMS)",
-        source=f"NASA FIRMS area API (sensor={sensor}, area={resolved_area}, days={days})",
+        source=f"NASA FIRMS area API (sensor={sensor}, area={resolved_area}, {window_desc})",
         license="NASA FIRMS terms (attribution required)",
         treatment="real",
         path=out_path,
@@ -265,7 +369,9 @@ def ingest_from_api(
         observation_end=str(df["observation_time"].max()) if len(df) else None,
         notes=(
             "FIRMS detections are not confirmed burned area. Fetched via the FIRMS "
-            "area API; key is deliberately omitted from provenance."
+            "area API (NRT - near-real-time processing). For Standard Processing "
+            "(SP) archive quality use the FIRMS Archive Download Tool CSVs with "
+            "ingest-firms --input. Key is deliberately omitted from provenance."
         ),
     )
     return df, out_path

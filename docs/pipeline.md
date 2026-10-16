@@ -36,6 +36,15 @@ uv run haze-pipelines ingest-polygons --input data/raw/concessions/bnpb_gfw_2026
 
 # 2. Fire hotspots - automatic pull (needs a free FIRMS_API_KEY), local CSVs, or fixtures
 uv run haze-pipelines ingest-firms --from-api --days 3 --out data/processed/fire_hotspots.parquet
+# historical backfill: walks <=5-day DATE-anchored windows from --start-date
+# (dedup across windows; NRT processing recorded in provenance - use the FIRMS
+# Archive Download Tool + --input for SP archive quality)
+uv run haze-pipelines ingest-firms --from-api --start-date 2015-06-01 --backfill-days 120 \
+  --sensor VIIRS_SNPP_NRT --out data/processed/fire_hotspots.parquet
+# 2b. Haze/aerosol indicators (CAMS via Open-Meteo) - FIRMS is fire, NOT haze.
+# NOTE: this route's archive starts 2022-08-31; deeper haze history needs NASA
+# Earthdata (OMPS Aerosol Index 2012+ / MODIS MAIAC AOD 2000+).
+uv run haze-pipelines ingest-aerosol --start 2023-01-01 --end 2023-03-31 --grid 3
 uv run haze-pipelines ingest-firms --from-api --area 95,-6,120,6 --sensor VIIRS_SNPP_NRT \
     --out data/processed/fire_hotspots.parquet
 uv run haze-pipelines ingest-firms --input data/raw/firms --out data/processed/fire_hotspots.parquet
@@ -95,6 +104,7 @@ Caveats (this build of the extension):
 |---|---|---|
 | `plantation_polygons` | `ingest-polygons` / `fetch-concessions` | `real-restricted` |
 | `fire_observations` | `ingest-firms` | `real` or `synthetic-fixture` |
+| `haze_aerosol` | `ingest-aerosol` | `real` (CAMS via Open-Meteo; archive from 2022-08-31) |
 | `environmental_features` | `build-features` | `real` (derived) |
 | `synthetic_financial_exposures` | `synthetic/` engine (next) | `synthetic` |
 

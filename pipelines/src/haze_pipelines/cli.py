@@ -35,7 +35,10 @@ def _cmd_ingest_firms(args: argparse.Namespace) -> int:
                 area=args.area,
                 days=args.days,
                 sensor=args.sensor,
+                start_date=args.start_date,
+                backfill_days=args.backfill_days,
                 settings_obj=args.settings_obj,
+                progress=lambda msg: print(f"  {msg}"),
             )
         except (RuntimeError, ValueError, httpx.HTTPError) as exc:
             print(f"FIRMS API ingest failed: {exc}", file=sys.stderr)
@@ -64,6 +67,20 @@ def _cmd_ingest_weather(args: argparse.Namespace) -> int:
         stations, args.start, args.end, Path(args.out), settings_obj=args.settings_obj
     )
     print(f"ingested {len(df)} station-days over {len(stations)} stations -> {out}")
+    return 0
+
+
+def _cmd_ingest_aerosol(args: argparse.Namespace) -> int:
+    from .ingest_aerosol import default_points, ingest_grid
+
+    kwargs: dict = {"grid": args.grid}
+    if args.bbox:
+        kwargs["bbox"] = tuple(float(v) for v in args.bbox.split(","))
+    points = default_points(**kwargs)
+    df, out = ingest_grid(
+        points, args.start, args.end, Path(args.out), settings_obj=args.settings_obj
+    )
+    print(f"ingested {len(df)} point-days over {len(points)} grid points -> {out}")
     return 0
 
 
@@ -266,7 +283,18 @@ def build_parser(settings_obj: Settings) -> argparse.ArgumentParser:
         "--days",
         type=int,
         default=3,
-        help="Trailing window in days, 1-10 (FIRMS API limit)",
+        help="Trailing window in days, 1-5 (FIRMS area API per-request limit)",
+    )
+    p.add_argument(
+        "--start-date",
+        default=None,
+        help="YYYY-MM-DD: pull a historical range starting here (chunked <=5-day windows)",
+    )
+    p.add_argument(
+        "--backfill-days",
+        type=int,
+        default=None,
+        help="Range length in days from --start-date (or, alone, trailing N days ending today)",
     )
     p.add_argument(
         "--sensor",
@@ -280,6 +308,14 @@ def build_parser(settings_obj: Settings) -> argparse.ArgumentParser:
     p.add_argument("--n", type=int, default=12)
     p.add_argument("--center", default=None, help="lon,lat center for the fixture cluster")
     p.set_defaults(func=_cmd_make_fixtures)
+
+    p = sub.add_parser("ingest-aerosol", help="Ingest CAMS haze/aerosol indicators (AOD/PM via Open-Meteo)")
+    p.add_argument("--start", required=True, help="YYYY-MM-DD")
+    p.add_argument("--end", required=True, help="YYYY-MM-DD")
+    p.add_argument("--out", default=str(settings_obj.processed_dir / "haze_aerosol.parquet"))
+    p.add_argument("--bbox", default=None, help="min_lon,min_lat,max_lon,max_lat (default: Indonesia)")
+    p.add_argument("--grid", type=int, default=3, help="grid points per axis (CAMS is coarse, ~50 km)")
+    p.set_defaults(func=_cmd_ingest_aerosol)
 
     p = sub.add_parser("ingest-weather", help="Ingest Open-Meteo/ERA5 daily weather")
     p.add_argument("--stations", required=True, help="CSV with station_id,latitude,longitude columns")

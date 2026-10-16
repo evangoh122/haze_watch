@@ -8,6 +8,7 @@ from haze_pipelines.fixtures import fixture_hotspots
 from haze_pipelines.ingest_firms import (
     default_area,
     fetch_firms_area,
+    fetch_firms_range,
     ingest_from_api,
     normalize_firms,
 )
@@ -157,8 +158,10 @@ def test_fetch_firms_area_requires_key():
 
 
 def test_fetch_firms_area_rejects_out_of_range_days():
-    with pytest.raises(ValueError, match="1-10 days"):
-        fetch_firms_area("94,-11.5,141.5,6.5", 11, api_key="KEY", client=_FakeClient(FIRMS_CSV))
+    with pytest.raises(ValueError, match="1-5 days"):
+        fetch_firms_area("94,-11.5,141.5,6.5", 6, api_key="KEY", client=_FakeClient(FIRMS_CSV))
+    with pytest.raises(ValueError, match="1-5 days"):
+        fetch_firms_area("94,-11.5,141.5,6.5", 0, api_key="KEY", client=_FakeClient(FIRMS_CSV))
 
 
 def test_ingest_from_api_writes_and_registers_as_real(tmp_path):
@@ -177,3 +180,63 @@ def test_ingest_from_api_writes_and_registers_as_real(tmp_path):
     assert entry["treatment"] == "real"
     assert "area=" in entry["source"]
     assert "KEY" not in entry["source"]  # the API key must never be recorded
+
+
+def test_fetch_firms_area_appends_date_param():
+    client = _FakeClient(FIRMS_CSV)
+    fetch_firms_area(
+        "94,-11.5,141.5,6.5", 3, api_key="KEY", client=client, date="2015-09-01"
+    )
+    assert client.urls[0].endswith("/3/2015-09-01")
+
+
+def test_fetch_firms_area_rejects_malformed_date():
+    with pytest.raises(ValueError):
+        fetch_firms_area(
+            "94,-11.5,141.5,6.5", 3, api_key="KEY", client=_FakeClient(FIRMS_CSV), date="01-09-2015"
+        )
+
+
+def test_fetch_firms_range_chunks_windows_and_dedups():
+    """12 days -> 3 requests (5+5+2); identical rows across windows dedup on hotspot_id."""
+    client = _FakeClient(FIRMS_CSV)
+    sleeps: list[float] = []
+    df = fetch_firms_range(
+        "94,-11.5,141.5,6.5",
+        "2015-09-01",
+        12,
+        api_key="KEY",
+        client=client,
+        sleep=sleeps.append,
+    )
+
+    assert [u.rsplit("/", 2)[-2:] for u in client.urls] == [
+        ["5", "2015-09-01"],
+        ["5", "2015-09-06"],
+        ["2", "2015-09-11"],
+    ]
+    assert len(sleeps) == 2  # paced between windows only
+    assert len(df) == 2  # same 2 rows returned every window -> deduplicated
+
+
+def test_ingest_from_api_backfill_registers_range(tmp_path):
+    settings_obj = Settings(data_dir=tmp_path, firms_api_key="KEY")
+    out = tmp_path / "processed" / "fire_hotspots.parquet"
+
+    df, written = ingest_from_api(
+        out,
+        sensor="MODIS_NRT",
+        start_date="2015-09-01",
+        backfill_days=12,
+        settings_obj=settings_obj,
+        client=_FakeClient(FIRMS_CSV),
+    )
+
+    assert written == out and len(df) == 2
+    entry = {e["dataset_id"]: e for e in read_registry(tmp_path / "metadata")}[
+        "fire_hotspots::nasa_firms"
+    ]
+    assert "start=2015-09-01" in entry["source"]
+    assert "backfill_days=12" in entry["source"]
+    assert "NRT" in entry["notes"]  # SP/NRT distinction recorded
+    assert "KEY" not in entry["source"]

@@ -6,8 +6,9 @@ infrastructure unless measurable latency requirements justify it.
 | Job | Command | Output |
 |---|---|---|
 | Fixture hotspots (testing) | `haze-pipelines make-fixture-hotspots` | labeled synthetic CSV |
-| Fire hotspots | `haze-pipelines ingest-firms [--fixture]` | `data/processed/fire_hotspots.parquet` |
+| Fire hotspots | `haze-pipelines ingest-firms [--fixture]` (API history: `--from-api --start-date ... --backfill-days ...`) | `data/processed/fire_hotspots.parquet` |
 | Weather | `haze-pipelines ingest-weather` | `data/processed/weather.parquet` |
+| Haze/aerosol | `haze-pipelines ingest-aerosol --start ... --end ...` | `data/processed/haze_aerosol.parquet` |
 | Concessions fetch | `haze-pipelines fetch-concessions --source bnpb\|gfw\|gfw-peatlands` | GeoJSON (license gate) |
 | Concessions normalize | `haze-pipelines ingest-polygons` | `data/processed/plantation_polygons.parquet` |
 | Features | `haze-pipelines build-features` | `data/processed/environmental_features.parquet` |
