@@ -110,8 +110,13 @@ def normalize_firms(
 
     if len(df) == 0:
         # Empty windows (e.g. plain-text API notices) skip the transforms below -
-        # empty object-dtype columns break the timestamp string concat.
-        return pd.DataFrame(columns=CANONICAL_COLUMNS)
+        # empty object-dtype columns break the timestamp string concat. Datetime
+        # columns must carry a real dtype: pd.concat with empty object frames
+        # otherwise coerces real rows to object and breaks .dt downstream.
+        empty = pd.DataFrame(columns=CANONICAL_COLUMNS)
+        empty["observation_time"] = pd.Series(dtype="datetime64[ns, UTC]")
+        empty["available_time"] = pd.Series(dtype="datetime64[ns, UTC]")
+        return empty
 
     obs_time = pd.to_datetime(
         df[date_col].astype(str).str.strip()
@@ -329,6 +334,15 @@ def fetch_firms_range(
     if not frames:
         return pd.DataFrame()
     merged = pd.concat(frames, ignore_index=True)
+    if len(merged):
+        # Defensive: mixed empty/data windows must not leave object-dtype times
+        # (the sync groups by observation_time.dt.year).
+        merged["observation_time"] = pd.to_datetime(
+            merged["observation_time"], utc=True, errors="coerce"
+        )
+        merged["available_time"] = pd.to_datetime(
+            merged["available_time"], utc=True, errors="coerce"
+        )
     return merged.drop_duplicates(subset=["hotspot_id"]).reset_index(drop=True)
 
 

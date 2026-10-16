@@ -292,3 +292,29 @@ def test_fetch_firms_range_clamps_window_span_to_today():
     assert client.urls == [
         f"https://firms.modaps.eosdis.nasa.gov/api/area/csv/KEY/MODIS_NRT/94,-11.5,141.5,6.5/2/{start}"
     ]
+
+
+def test_fetch_firms_range_mixed_empty_windows_keep_datetime_dtype():
+    """Real + empty windows must not coerce times to object dtype.
+
+    The sync groups by ``observation_time.dt.year``; an empty window mixed with
+    real data used to blow up the whole backfill after the last window.
+    """
+
+    class _QueueClient(_FakeClient):
+        def __init__(self, texts: list[str]) -> None:
+            self._texts = list(texts)
+            self.urls: list[str] = []
+
+        def get(self, url: str, **_: object) -> _FakeResponse:
+            self.urls.append(url)
+            return _FakeResponse(self._texts.pop(0))
+
+    client = _QueueClient([FIRMS_CSV, "No hotspots available."])
+    df = fetch_firms_range(
+        "94,-11.5,141.5,6.5", "2015-09-01", 10, api_key="KEY", client=client, sleep=None
+    )
+    assert len(client.urls) == 2
+    assert len(df) == 2
+    assert str(df["observation_time"].dtype).startswith("datetime64")
+    assert df["observation_time"].dt.year.tolist() == [2026, 2026]  # must not raise
