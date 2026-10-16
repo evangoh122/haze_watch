@@ -15,12 +15,26 @@ on:
         required: false
         default: "7"
       sensor:
-        description: "FIRMS sensor (MODIS_NRT, VIIRS_SNPP_NRT, VIIRS_NOAA20_NRT, VIIRS_NOAA21_NRT)"
+        description: "FIRMS sensor: *_SP for history/archive quality (MODIS_SP, VIIRS_SNPP_SP, VIIRS_NOAA20_SP, VIIRS_NOAA21_SP) or *_NRT for recency (MODIS_NRT, VIIRS_SNPP_NRT, VIIRS_NOAA20_NRT, VIIRS_NOAA21_NRT). NRT sources only serve their retention window - use _SP for backfills."
         required: false
         default: "MODIS_NRT"
 
 permissions:
   contents: read
+
+# One lane at a time: all sensors share a single MAP_KEY, whose measured wall is
+# ~500 requests / 10 min (observed 2026-10-16: four parallel lanes died inside
+# the same 2 seconds at ~440 requests combined; a lone lane died at ~499 windows
+# with "Exceeding allowed transaction limit.").
+#
+# Dispatch backfills ONE AT A TIME and wait for each to finish. GitHub holds at
+# most one pending run per concurrency group and cancels the older waiting run
+# when a newer one joins the group, so firing four together silently drops
+# lanes - cancel-in-progress: false only protects the run already executing.
+# The daily schedule run can likewise cancel a waiting backfill.
+concurrency:
+  group: firms-api
+  cancel-in-progress: false
 
 jobs:
   sync:
@@ -66,6 +80,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: firms-history-geoparquet
-          path: data/history_geo/year=*.parquet
+          path: data/history_geo/
           if-no-files-found: error
           retention-days: 7

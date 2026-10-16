@@ -108,6 +108,16 @@ def normalize_firms(
             "(expected real FIRMS schema acq_date/acq_time or derived acquired_date/acquired_time)"
         )
 
+    if len(df) == 0:
+        # Empty windows (e.g. plain-text API notices) skip the transforms below -
+        # empty object-dtype columns break the timestamp string concat. Datetime
+        # columns must carry a real dtype: pd.concat with empty object frames
+        # otherwise coerces real rows to object and breaks .dt downstream.
+        empty = pd.DataFrame(columns=CANONICAL_COLUMNS)
+        empty["observation_time"] = pd.Series(dtype="datetime64[ns, UTC]")
+        empty["available_time"] = pd.Series(dtype="datetime64[ns, UTC]")
+        return empty
+
     obs_time = pd.to_datetime(
         df[date_col].astype(str).str.strip()
         + " "
@@ -167,10 +177,46 @@ def read_firms_csvs(
     return merged.drop_duplicates(subset=["hotspot_id"]).reset_index(drop=True)
 
 
+# The exact plain-text notices the FIRMS area API returns for a window with no
+# detections. Anything else that is not CSV is an error, not an empty window.
+_EMPTY_WINDOW_NOTICES = {"no hotspots available", "no data available"}
+
 # FIRMS area API window limit per request (the API form documents 1-5 days;
 # larger DAY_RANGE values consume multiple transactions and are rejected by the
 # form). Longer spans are chunked by fetch_firms_range.
 MAX_DAYS_PER_REQUEST = 5
+
+
+# The MAP_KEY quota wall, in FIRMS' own words. NASA documents 5,000 transactions
+# / 10 min, but the observed wall is far lower: on 2026-10-16 a lone
+# VIIRS_NOAA20_SP lane raised exactly this notice after ~499 windows in ~10 min,
+# and four parallel lanes died within the same 2 seconds at ~440 requests
+# combined. Treat it as ~500 / 10 min.
+_RATE_LIMIT_NOTICES = ("exceeding allowed transaction limit",)
+
+
+def _is_rate_limit_notice(body: str) -> bool:
+    lowered = body.lower()
+    return any(notice in lowered for notice in _RATE_LIMIT_NOTICES)
+
+
+def _backoff_seconds(attempt: int) -> float:
+    """Exponential backoff with jitter (shared-key bursts must not synchronize)."""
+    import random
+
+    return min(30.0, 2.0**attempt) * (0.5 + random.random())
+
+
+def _rate_limit_backoff_seconds(attempt: int) -> float:
+    """Wait out the quota window instead of retrying into it.
+
+    The wall clears on a ~10 min rolling window, so the 30 s transient backoff is
+    useless here: attempts wait ~2, ~4 and ~8 min (capped at 10) before giving up,
+    which is enough to clear the window on a long checkpointed backfill.
+    """
+    import random
+
+    return min(600.0, 120.0 * (2.0**attempt)) * (0.75 + 0.5 * random.random())
 
 
 def fetch_firms_area(
@@ -181,6 +227,8 @@ def fetch_firms_area(
     client: httpx.Client | None = None,
     sensor: str = "MODIS_NRT",
     date: str | None = None,
+    max_retries: int = 4,
+    sleep=time.sleep,
 ) -> pd.DataFrame:
     """Fetch an area extract from the FIRMS CSV API (requires FIRMS_API_KEY).
 
@@ -212,16 +260,76 @@ def fetch_firms_area(
     own_client = client is None
     client = client or httpx.Client(timeout=60.0)
     try:
-        response = client.get(url)
-        response.raise_for_status()
+        body = ""
+        status = 0
+        for attempt in range(max_retries):
+            try:
+                response = client.get(url)
+            except httpx.TransportError:
+                if attempt == max_retries - 1:
+                    raise
+                if sleep is not None:
+                    sleep(_backoff_seconds(attempt))
+                continue
+            status = response.status_code
+            # Read the body BEFORE judging the status: FIRMS explains failures
+            # (and empty windows) in a short plain-text notice that never
+            # contains the key. HTTP 400 has proven transient (shared-key
+            # bursts), so 4xx/5xx retry with backoff + jitter.
+            body = (response.text or "").strip()
+            if status < 400:
+                break
+            if attempt == max_retries - 1:
+                raise RuntimeError(
+                    f"FIRMS API HTTP {status} ({sensor}, {days}-day window from "
+                    f"{date or 'today'}): {body[:200]}"
+                )
+            if sleep is not None:
+                # A quota wall needs minutes, not the transient seconds. HTTP 429
+                # says rate-limited even when the body is an intermediary's rather
+                # than FIRMS' own notice.
+                if status == 429 or _is_rate_limit_notice(body):
+                    sleep(_rate_limit_backoff_seconds(attempt))
+                else:
+                    sleep(_backoff_seconds(attempt))
     finally:
         if own_client:
             client.close()
 
     from io import StringIO
 
+    body = (response.text or "").strip()
+    first_line = body.splitlines()[0].lower() if body else ""
+    if "latitude" not in first_line:
+        # Only the known empty-window notices mean "no detections". Anything
+        # else (service notices, auth failures) must fail loudly - a 25-year
+        # backfill may never silently omit a window. Never interpolate the
+        # request URL here: it contains the MAP_KEY and the CLI prints
+        # RuntimeError messages to stderr (CI logs).
+        if body.lower().rstrip(".") in _EMPTY_WINDOW_NOTICES:
+            return normalize_firms(
+                pd.DataFrame(
+                    columns=[
+                        "latitude",
+                        "longitude",
+                        "acq_date",
+                        "acq_time",
+                        "satellite",
+                        "confidence",
+                        "frp",
+                        "daynight",
+                        "bright_ti4",
+                    ]
+                ),
+                source=f"NASA_FIRMS_{sensor}",
+                available_lag_hours=settings.firms_availability_lag_hours,
+            )
+        raise RuntimeError(
+            f"FIRMS API error ({sensor}, {days}-day window from {date or 'today'}): {body[:200]}"
+        )
+
     return normalize_firms(
-        pd.read_csv(StringIO(response.text)),
+        pd.read_csv(StringIO(body)),
         source=f"NASA_FIRMS_{sensor}",
         available_lag_hours=settings.firms_availability_lag_hours,
     )
@@ -236,6 +344,7 @@ def fetch_firms_range(
     client: httpx.Client | None = None,
     sensor: str = "MODIS_NRT",
     window_days: int = MAX_DAYS_PER_REQUEST,
+    pace_seconds: float = 1.0,
     sleep=time.sleep,
     progress=None,
 ) -> pd.DataFrame:
@@ -244,8 +353,15 @@ def fetch_firms_range(
     The area API takes ``DAY_RANGE`` + ``DATE`` (returns DATE..DATE+DAY_RANGE-1),
     so a range is one request per window. Rows are deduplicated across windows on
     ``hotspot_id`` (stable hash of source/lat/lon/time), so overlapping or retried
-    windows never double-count a detection. Gentle pacing between requests keeps
-    well inside the MAP_KEY quota (5,000 transactions / 10 min).
+    windows never double-count a detection.
+
+    ``pace_seconds`` spaces the requests. The measured MAP_KEY wall is ~500
+    requests / 10 min (not the 5,000 NASA's docs advertise - see
+    ``_RATE_LIMIT_NOTICES``). The round trip itself costs ~0.9 s, so the 1.0 s
+    default lands near 32 windows/min (~320 / 10 min, about two thirds of the
+    wall) and leaves headroom for the daily job and ad-hoc probes. A lane that
+    still trips the wall backs off for minutes via
+    ``_rate_limit_backoff_seconds``.
     """
     from datetime import date as date_cls
     from datetime import timedelta
@@ -258,9 +374,19 @@ def fetch_firms_range(
 
     frames: list[pd.DataFrame] = []
     offset = 0
+    from datetime import date as date_cls
+
+    today = date_cls.today()
     while offset < backfill_days:
-        span = min(window_days, backfill_days - offset)
-        window_start = (start + timedelta(days=offset)).isoformat()
+        window_date = start + timedelta(days=offset)
+        if window_date > today:
+            if progress is not None:
+                progress(f"firms range stops at today ({today}); skipping future windows")
+            break
+        # The window must not extend past today: the API is asked for
+        # DATE..DATE+span-1, so clamp the span to the remaining days.
+        span = min(window_days, backfill_days - offset, (today - window_date).days + 1)
+        window_start = window_date.isoformat()
         if progress is not None:
             progress(f"firms window {window_start} +{span}d ({sensor})")
         frames.append(
@@ -271,15 +397,25 @@ def fetch_firms_range(
                 client=client,
                 sensor=sensor,
                 date=window_start,
+                sleep=sleep,
             )
         )
         offset += span
-        if offset < backfill_days and sleep is not None:
-            sleep(0.25)
+        if offset < backfill_days and sleep is not None and pace_seconds:
+            sleep(pace_seconds)
 
     if not frames:
         return pd.DataFrame()
     merged = pd.concat(frames, ignore_index=True)
+    if len(merged):
+        # Defensive: mixed empty/data windows must not leave object-dtype times
+        # (the sync groups by observation_time.dt.year).
+        merged["observation_time"] = pd.to_datetime(
+            merged["observation_time"], utc=True, errors="coerce"
+        )
+        merged["available_time"] = pd.to_datetime(
+            merged["available_time"], utc=True, errors="coerce"
+        )
     return merged.drop_duplicates(subset=["hotspot_id"]).reset_index(drop=True)
 
 

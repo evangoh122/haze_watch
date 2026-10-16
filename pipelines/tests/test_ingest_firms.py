@@ -111,8 +111,9 @@ FIRMS_CSV = (
 
 
 class _FakeResponse:
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str, status_code: int = 200) -> None:
         self.text = text
+        self.status_code = status_code
 
     def raise_for_status(self) -> None:
         return None
@@ -219,6 +220,22 @@ def test_fetch_firms_range_chunks_windows_and_dedups():
     assert len(df) == 2  # same 2 rows returned every window -> deduplicated
 
 
+def test_fetch_firms_range_pacing_is_configurable():
+    """Pacing must be tunable: the quota wall is ~50 requests/min, not 240."""
+    client = _FakeClient(FIRMS_CSV)
+    sleeps: list[float] = []
+    fetch_firms_range(
+        "94,-11.5,141.5,6.5",
+        "2015-09-01",
+        12,
+        api_key="KEY",
+        client=client,
+        sleep=sleeps.append,
+        pace_seconds=1.5,
+    )
+    assert sleeps == [1.5, 1.5]
+
+
 def test_ingest_from_api_backfill_registers_range(tmp_path):
     settings_obj = Settings(data_dir=tmp_path, firms_api_key="KEY")
     out = tmp_path / "processed" / "fire_hotspots.parquet"
@@ -240,3 +257,165 @@ def test_ingest_from_api_backfill_registers_range(tmp_path):
     assert "backfill_days=12" in entry["source"]
     assert "NRT" in entry["notes"]  # SP/NRT distinction recorded
     assert "KEY" not in entry["source"]
+
+
+def test_fetch_firms_area_empty_notice_returns_empty_frame():
+    client = _FakeClient("No hotspots available.")
+    df = fetch_firms_area("94,-11.5,141.5,6.5", 3, api_key="KEY", client=client)
+    assert len(df) == 0
+    assert "hotspot_id" in df.columns  # canonical schema preserved
+
+
+def test_fetch_firms_area_bad_key_raises_without_leaking_the_key():
+    client = _FakeClient("Invalid MAP_KEY. Please check your MAP_KEY.")
+    with pytest.raises(RuntimeError, match="FIRMS API error") as exc:
+        fetch_firms_area(
+            "94,-11.5,141.5,6.5", 3, api_key="SECRETKEY123", client=client, sleep=None
+        )
+    assert "SECRETKEY123" not in str(exc.value)  # the MAP_KEY must never reach logs
+
+
+def test_fetch_firms_area_unknown_notice_raises():
+    """A transient service notice must fail loudly, not fake an empty window."""
+    client = _FakeClient("Service temporarily degraded, retry later.")
+    with pytest.raises(RuntimeError, match="FIRMS API error"):
+        fetch_firms_area(
+            "94,-11.5,141.5,6.5", 3, api_key="KEY", client=client, sleep=None
+        )
+
+
+class _SequenceClient(_FakeClient):
+    """Returns queued (status_code, text) responses."""
+
+    def __init__(self, responses: list[tuple[int, str]]) -> None:
+        self._responses = list(responses)
+        self.urls: list[str] = []
+
+    def get(self, url: str, **_: object) -> _FakeResponse:
+        self.urls.append(url)
+        status, text = self._responses.pop(0)
+        return _FakeResponse(text, status_code=status)
+
+
+def test_fetch_firms_area_retries_transient_http_errors():
+    """A400 has proven transient (shared-key bursts) - retry with backoff."""
+    client = _SequenceClient([(400, "Bad Request"), (200, FIRMS_CSV)])
+    sleeps: list[float] = []
+    df = fetch_firms_area(
+        "94,-11.5,141.5,6.5", 3, api_key="KEY", client=client, sleep=sleeps.append
+    )
+    assert len(df) == 2
+    assert len(client.urls) == 2 and len(sleeps) == 1
+
+
+def test_fetch_firms_area_final_failure_surfaces_notice_not_key():
+    client = _SequenceClient([(400, "Invalid MAP_KEY."), (400, "Invalid MAP_KEY.")])
+    with pytest.raises(RuntimeError, match="HTTP 400") as exc:
+        fetch_firms_area(
+            "94,-11.5,141.5,6.5",
+            3,
+            api_key="SECRETKEY123",
+            client=client,
+            max_retries=2,
+            sleep=None,
+        )
+    assert "Invalid MAP_KEY" in str(exc.value)  # FIRMS' reason reaches the log
+    assert "SECRETKEY123" not in str(exc.value)  # the key never does
+
+
+def test_fetch_firms_area_quota_wall_backs_off_for_minutes():
+    """The measured MAP_KEY wall is ~500 requests / 10 min.
+
+    Observed 2026-10-16: a lone VIIRS_NOAA20_SP lane raised "Exceeding allowed
+    transaction limit." after ~499 windows in ~10 min. Retrying after the 0.5-30s
+    transient backoff just hits the same wall, so this notice must wait minutes.
+    """
+    client = _SequenceClient(
+        [(400, "Exceeding allowed transaction limit."), (200, FIRMS_CSV)]
+    )
+    sleeps: list[float] = []
+    df = fetch_firms_area(
+        "94,-11.5,141.5,6.5", 3, api_key="KEY", client=client, sleep=sleeps.append
+    )
+
+    assert len(df) == 2
+    assert len(sleeps) == 1
+    assert sleeps[0] >= 60.0  # minutes, not the <=30s transient backoff
+
+
+def test_fetch_firms_area_transient_error_keeps_the_short_backoff():
+    """A generic 400 must not pay the multi-minute quota wait."""
+    client = _SequenceClient([(400, "Bad Request"), (200, FIRMS_CSV)])
+    sleeps: list[float] = []
+    fetch_firms_area(
+        "94,-11.5,141.5,6.5", 3, api_key="KEY", client=client, sleep=sleeps.append
+    )
+    assert sleeps[0] <= 30.0
+
+
+def test_fetch_firms_area_http_429_waits_out_the_window_regardless_of_body():
+    """429 means rate-limited even when the body is an intermediary's, not FIRMS'."""
+    client = _SequenceClient([(429, "Too Many Requests"), (200, FIRMS_CSV)])
+    sleeps: list[float] = []
+    df = fetch_firms_area(
+        "94,-11.5,141.5,6.5", 3, api_key="KEY", client=client, sleep=sleeps.append
+    )
+    assert len(df) == 2
+    assert sleeps[0] >= 60.0
+
+
+def test_fetch_firms_range_stops_at_today():
+    """Future windows must not be requested - a long backfill stops, not fails."""
+    from datetime import date as date_cls
+    from datetime import timedelta
+
+    client = _FakeClient(FIRMS_CSV)
+    future = (date_cls.today() + timedelta(days=3)).isoformat()
+    df = fetch_firms_range(
+        "94,-11.5,141.5,6.5", future, 30, api_key="KEY", client=client, sleep=None
+    )
+    assert client.urls == []  # nothing requested
+    assert len(df) == 0
+
+
+def test_fetch_firms_range_clamps_window_span_to_today():
+    """DATE..DATE+span-1 must never reach past today, even mid-range."""
+    from datetime import date as date_cls
+    from datetime import timedelta
+
+    client = _FakeClient(FIRMS_CSV)
+    today = date_cls.today()
+    start = (today - timedelta(days=1)).isoformat()
+    fetch_firms_range(
+        "94,-11.5,141.5,6.5", start, 10, api_key="KEY", client=client, sleep=None
+    )
+    # yesterday..today is 2 days -> one clamped request, no future dates
+    assert client.urls == [
+        f"https://firms.modaps.eosdis.nasa.gov/api/area/csv/KEY/MODIS_NRT/94,-11.5,141.5,6.5/2/{start}"
+    ]
+
+
+def test_fetch_firms_range_mixed_empty_windows_keep_datetime_dtype():
+    """Real + empty windows must not coerce times to object dtype.
+
+    The sync groups by ``observation_time.dt.year``; an empty window mixed with
+    real data used to blow up the whole backfill after the last window.
+    """
+
+    class _QueueClient(_FakeClient):
+        def __init__(self, texts: list[str]) -> None:
+            self._texts = list(texts)
+            self.urls: list[str] = []
+
+        def get(self, url: str, **_: object) -> _FakeResponse:
+            self.urls.append(url)
+            return _FakeResponse(self._texts.pop(0))
+
+    client = _QueueClient([FIRMS_CSV, "No hotspots available."])
+    df = fetch_firms_range(
+        "94,-11.5,141.5,6.5", "2015-09-01", 10, api_key="KEY", client=client, sleep=None
+    )
+    assert len(client.urls) == 2
+    assert len(df) == 2
+    assert str(df["observation_time"].dtype).startswith("datetime64")
+    assert df["observation_time"].dt.year.tolist() == [2026, 2026]  # must not raise
