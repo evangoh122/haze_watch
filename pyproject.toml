@@ -12,4 +12,6 @@ dev = [
     "ruff>=0.6",
     # Used by private/ (hand-sourced company YAML) and its tests.
     "pyyaml>=6.0",
+    # HF dataset history export/fetch (scripts/*_hf.py).
+    "huggingface_hub>=0.26",
 ]

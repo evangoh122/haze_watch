@@ -117,6 +117,16 @@ def answer_from_context(question: str, context: GroundedContext) -> str:
         return "\n".join(lines)
 
     if any(k in q for k in ("forecast", "hazard", "risk score", "predict", "probability")):
+        has_forecast = any(
+            "forecast" in str(entry.get("dataset_id", "")).lower() for entry in context.registry
+        )
+        if not has_forecast:
+            return (
+                f"{label} No forecast dataset is registered in this deployment, so I "
+                "cannot report fire forecasts. When it is loaded, it is a deterministic "
+                "baseline hazard score (0-1) - not a calibrated probability, not a "
+                "validated fire forecast, and not a probability of default."
+            )
         return (
             f"{label} The loaded forecast is a deterministic baseline hazard score "
             "(0-1), not a calibrated probability, not a validated fire forecast and "
@@ -154,5 +164,10 @@ def make_client(settings: LLMSettings | None = None) -> ChatClient:
     """Pick the provider: HTTP client when configured, deterministic fallback otherwise."""
     settings = settings or llm_settings
     if settings.base_url and settings.api_key:
+        if not settings.model:
+            raise RuntimeError(
+                "LLM_MODEL must be set to a valid model id (e.g. deepseek-chat) when "
+                "LLM_BASE_URL and LLM_API_KEY are configured. See docs/llm.md."
+            )
         return OpenAICompatibleClient()
     return DeterministicFallbackClient()

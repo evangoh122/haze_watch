@@ -35,6 +35,7 @@ def _require(path: Path) -> Path:
 @router.get("/fires/hotspots")
 def fire_hotspots(limit: int = 500) -> dict:
     """Hotspot detections (pipeline dataset; treatment label included)."""
+    limit = max(1, min(limit, 5000))
     path = _require(settings.data_dir / "processed" / "fire_hotspots.parquet")
     df = pd.read_parquet(path).head(limit)
     is_fixture = bool(df["is_fixture"].any()) if len(df) else False
@@ -74,6 +75,7 @@ def exposure_summary() -> dict:
 @router.get("/forecasts")
 def forecasts(horizon_hours: int | None = 24, limit: int = 50) -> dict:
     """Baseline hazard scores (labeled baseline - not a validated forecast)."""
+    limit = max(1, min(limit, 2000))
     path = _require(settings.data_dir / "processed" / "forecast_baseline.parquet")
     df = pd.read_parquet(path)
     if horizon_hours is not None:
