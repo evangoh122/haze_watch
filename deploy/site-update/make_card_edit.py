@@ -4,23 +4,26 @@ Output (NOT uploaded - for DeepSeek review):
   deploy/site-update/PortfolioHome.tsx   full edited file
   deploy/site-update/PortfolioHome.patch unified diff against the live version
 
+Usage:
+    uv run python deploy/site-update/make_card_edit.py --source /path/to/PortfolioHome.tsx
+
+The source is the LIVE PortfolioHome.tsx from the evangoh.com site repo
+(egoh33/Auditable-Filing-QA). Pass --source, or set PORTFOLIO_HOME_SRC.
+
 Stats shown on the card are project-verified facts only (300 real concession
-polygons from the BNPB/GFW sample run, 24-72h forecast horizons, 41 pipeline
-tests). No invented metrics, per the portfolio's own disclaimer rules.
+polygons from the BNPB/GFW sample run, 24-72h forecast horizons, 46 pipeline
+tests measured via `uv run pytest pipelines/tests`). No invented metrics, per
+the portfolio's own disclaimer rules.
 """
 
+from __future__ import annotations
+
+import argparse
+import difflib
+import os
 from pathlib import Path
 
-SRC = Path(r"C:\Users\jianj\AppData\Local\Temp\opencode\PortfolioHome.tsx")
-OUT_DIR = Path(__file__).resolve().parents[2] / "deploy" / "site-update"
-
-text = SRC.read_text(encoding="utf-8")
-
-# 1) lucide imports: add Flame + ShieldCheck
-old_import = "import { Mail, ArrowRight, Cpu, Network, Database, Search, Sparkles } from 'lucide-react';"
-new_import = "import { Mail, ArrowRight, Cpu, Network, Database, Search, Sparkles, Flame, ShieldCheck } from 'lucide-react';"
-assert old_import in text, "import line not found"
-text = text.replace(old_import, new_import)
+OUT_DIR_DEFAULT = Path(__file__).resolve().parents[2] / "deploy" / "site-update"
 
 CARD = """
             <div
@@ -109,12 +112,93 @@ CARD = """
             </div>
 """
 
-# 2) insert the card after the second card, before the grid closes.
-anchor = "\n          </div>\n        </section>"
-idx = text.rindex(anchor)
-text = text[:idx] + "\n" + CARD + text[idx:]
 
-OUT_DIR.mkdir(parents=True, exist_ok=True)
-(OUT_DIR / "PortfolioHome.tsx").write_text(text, encoding="utf-8")
-print(f"edited file written: {OUT_DIR / 'PortfolioHome.tsx'}")
-print(f"cards in section: {text.count('data-tour=') + text.count('Open live demo')}")
+def edit(source: Path, out_dir: Path) -> Path:
+    original = source.read_text(encoding="utf-8")
+    text = original
+
+    # 1) lucide imports: add Flame + ShieldCheck
+    old_import = "import { Mail, ArrowRight, Cpu, Network, Database, Search, Sparkles } from 'lucide-react';"
+    new_import = "import { Mail, ArrowRight, Cpu, Network, Database, Search, Sparkles, Flame, ShieldCheck } from 'lucide-react';"
+    assert old_import in text, "import line not found"
+    text = text.replace(old_import, new_import)
+
+    # 2) accessible names below sm: the visible labels hide on small screens, so
+    #    LinkedIn/Contact need aria-labels like the GitHub link already has.
+    linkedin_anchor = (
+        '              href="https://www.linkedin.com/in/eevangoh/"\n'
+        "              target=\"_blank\"\n"
+        "              rel=\"noopener noreferrer\"\n"
+    )
+    assert linkedin_anchor in text, "LinkedIn anchor not found"
+    text = text.replace(
+        linkedin_anchor,
+        linkedin_anchor
+        + "              aria-label=\"Visit Evan Goh's LinkedIn profile\"\n"
+        + "              title=\"LinkedIn\"\n",
+    )
+    contact_anchor = '              href="mailto:evangohsg@gmail.com"\n'
+    assert contact_anchor in text, "Contact anchor not found"
+    text = text.replace(
+        contact_anchor,
+        contact_anchor
+        + "              aria-label=\"Contact Evan Goh\"\n"
+        + "              title=\"Contact\"\n",
+    )
+
+    # 3) footer disclaimer must not contradict the card's synthetic-data label.
+    old_footer = "All data is publicly sourced and not related to my work."
+    new_footer = (
+        "Environmental data is publicly sourced; demo companies and financial "
+        "figures are synthetic. Not related to my work."
+    )
+    assert old_footer in text, "footer disclaimer not found"
+    text = text.replace(old_footer, new_footer)
+
+    # 4) insert the card after the second card, before the grid closes.
+    anchor = "\n          </div>\n        </section>"
+    idx = text.rindex(anchor)
+    text = text[:idx] + "\n" + CARD + text[idx:]
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "PortfolioHome.tsx").write_text(text, encoding="utf-8")
+
+    patch = "".join(
+        difflib.unified_diff(
+            original.splitlines(keepends=True),
+            text.splitlines(keepends=True),
+            fromfile="a/PortfolioHome.tsx",
+            tofile="b/PortfolioHome.tsx",
+        )
+    )
+    (out_dir / "PortfolioHome.patch").write_text(patch, encoding="utf-8")
+
+    print(f"edited file written: {out_dir / 'PortfolioHome.tsx'}")
+    print(f"patch written: {out_dir / 'PortfolioHome.patch'} ({len(patch.splitlines())} lines)")
+    print(f"cards in section: {text.count('data-tour=') + text.count('Open live demo')}")
+    return out_dir / "PortfolioHome.tsx"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--source",
+        default=os.environ.get("PORTFOLIO_HOME_SRC"),
+        help="path to the live PortfolioHome.tsx (or set PORTFOLIO_HOME_SRC)",
+    )
+    parser.add_argument("--out-dir", default=str(OUT_DIR_DEFAULT))
+    args = parser.parse_args()
+    if not args.source:
+        raise SystemExit(
+            "no source file: pass --source /path/to/PortfolioHome.tsx or set "
+            "PORTFOLIO_HOME_SRC (the live file from the evangoh.com site repo)"
+        )
+    source = Path(args.source)
+    if not source.is_file():
+        raise SystemExit(f"source file not found: {source}")
+    edit(source, Path(args.out_dir))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

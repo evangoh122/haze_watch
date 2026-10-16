@@ -2,7 +2,11 @@
 #
 # NOT DEPLOYED YET - prepared for review. Deployment plan:
 #   1. Create Space egoh33/haze-watch (Docker SDK, private first)
-#   2. Push this directory as the Space repo root
+#   2. Build context is the PROJECT REPO ROOT (paths below are repo-root
+#      relative: frontend/, backend/, data/, deploy/hf-space/). For the Space,
+#      push the repo root as the Space repo root with this file at /Dockerfile
+#      (cp deploy/hf-space/Dockerfile ./Dockerfile), or test locally with:
+#          docker build -f deploy/hf-space/Dockerfile .
 #   3. Set secrets: LLM_BASE_URL / LLM_API_KEY / LLM_MODEL (DeepSeek), FIRMS_API_KEY
 #
 # Mirrors the RAG Workbench pattern: nginx serves the built React frontend and
@@ -20,6 +24,12 @@ RUN npm run build
 
 FROM python:3.12-slim
 WORKDIR /app
+
+# nginx + supervisord are NOT in the python base image and are not pip
+# dependencies - install them explicitly (CMD below runs supervisord).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends nginx supervisor \
+    && rm -rf /var/lib/apt/lists/*
 
 # Backend deps + package
 COPY pyproject.toml ./

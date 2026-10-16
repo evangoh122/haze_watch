@@ -60,6 +60,8 @@ export default function PortfolioHome() {
               href="https://www.linkedin.com/in/eevangoh/"
               target="_blank"
               rel="noopener noreferrer"
+              aria-label="Visit Evan Goh's LinkedIn profile"
+              title="LinkedIn"
               className="text-secondary hover:text-primary transition-colors flex items-center gap-1.5"
             >
               <LinkedinIcon size={15} />
@@ -78,6 +80,8 @@ export default function PortfolioHome() {
             </a>
             <a
               href="mailto:evangohsg@gmail.com"
+              aria-label="Contact Evan Goh"
+              title="Contact"
               className="text-secondary hover:text-primary transition-colors flex items-center gap-1.5"
             >
               <Mail size={15} />
@@ -449,7 +453,7 @@ export default function PortfolioHome() {
             </div>
           </div>
           <p className="mt-2 text-[11px] text-secondary/40 leading-relaxed max-w-2xl text-center">
-            Disclaimer: This is a personal portfolio and ongoing area of exploration. All views expressed are my own. All data is publicly sourced and not related to my work.
+            Disclaimer: This is a personal portfolio and ongoing area of exploration. All views expressed are my own. Environmental data is publicly sourced; demo companies and financial figures are synthetic. Not related to my work.
           </p>
         </div>
       </footer>

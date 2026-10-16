@@ -133,20 +133,24 @@ Caveats (this build of the extension):
 
 Pipeline history is exported to a **private HF dataset**
 (`egoh33/haze-watch-historical`) so runs survive local machine loss and agents
-can reference them:
+can reference them. Each run uploads to `runs/<run_id>/` with the same layout as
+the local `data/` directory (`processed/`, `metadata/`, `MANIFEST.json`), so
+runs accumulate instead of overwriting each other:
 
 ```bash
 # push current pipeline outputs (NEVER includes real-restricted geometry)
 uv run python scripts/export_history_to_hf.py --upload
 
-# fetch history for grounding / offline analysis
+# fetch the latest run (or --run <run_id>) for grounding / offline analysis
 uv run python scripts/fetch_history_from_hf.py --dest data/hf_history
 ```
 
 Governance: `plantation_polygons.parquet` is excluded from every upload (licence
-requires verification before redistribution); `exposure_public.geojson`
+requires verification before redistribution); `exposure.parquet` ships only in
+reduced form (centroids rounded to ~11 km, nearest-distance to whole km, areas
+bucketed to 500 ha - no exact concession coordinates); `exposure_public.geojson`
 (anonymized, simplified) is the only concession-derived geometry exported. The
-`MANIFEST.json` records exactly what left the machine.
+per-run `MANIFEST.json` records exactly what left the machine.
 
 Agent integration: the analyst chat grounds on `LLM_DATA_DIR` - point it at
 `data/hf_history` after `fetch_history_from_hf.py` to answer from historical

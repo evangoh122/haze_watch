@@ -17,6 +17,11 @@ Adds a **Haze Watch** card to the "selected work" section in the same style as
 the RAG Workbench card (glass preview, why-it-exists box, stat tiles, feature
 tiles, tag pills, CTA). It opens the Haze Watch HF Space in a new tab.
 
+The same edit also carries three small review fixes to the existing page:
+aria-labels on the LinkedIn/Contact header links (their visible labels hide
+below `sm`, unlike the GitHub link) and a reworded footer disclaimer ("All data
+is publicly sourced" contradicted the card's synthetic-data label).
+
 Card claims are project-verified facts only: 300 real concession polygons
 (BNPB/GFW sample run), 24-72h hazard horizons, 46 pipeline tests (measured via
 `uv run pytest pipelines/tests`). No invented metrics.
@@ -33,7 +38,9 @@ Card claims are project-verified facts only: 300 real concession polygons
 Option A - git (reviewable history):
 ```bash
 git clone https://huggingface.co/spaces/egoh33/Auditable-Filing-QA
+cd Auditable-Filing-QA
 # copy PortfolioHome.tsx over frontend/src/pages/PortfolioHome.tsx
+git add frontend/src/pages/PortfolioHome.tsx
 git commit -m "portfolio: add Haze Watch project card"
 git push   # space rebuilds; evangoh.com updates via Cloudflare
 ```
