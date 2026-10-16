@@ -1,6 +1,8 @@
 # Haze Watch - Hugging Face Space (single container)
 #
-# NOT DEPLOYED YET - prepared for review. Deployment plan:
+# DEPLOYED 2026-10-16 to https://huggingface.co/spaces/egoh33/haze-watch
+# (public; no secrets set - the deterministic data-grounded fallback answers).
+# Build/redeploy notes:
 #   1. Create Space egoh33/haze-watch (Docker SDK, private first)
 #   2. Build context is the PROJECT REPO ROOT (paths below are repo-root
 #      relative: frontend/, backend/, data/, deploy/hf-space/). For the Space,

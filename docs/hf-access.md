@@ -9,7 +9,7 @@ the standing review caveat has been "I cannot see the HF remote".
 | Thing | URL | Visibility |
 |---|---|---|
 | History dataset | `https://huggingface.co/datasets/egoh33/haze-watch-historical` | **private** (owner: `egoh33`) |
-| App Space (planned) | `https://huggingface.co/spaces/egoh33/haze-watch` | not created yet — deploy is gated on review approval |
+| App Space | `https://huggingface.co/spaces/egoh33/haze-watch` | public since 2026-10-16 (no secrets set; deterministic fallback) |
 
 The dataset holds the pipeline history export (processed outputs + provenance
 `registry.json` + `MANIFEST.json`). The manifest's `geometry_note` and

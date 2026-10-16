@@ -1,7 +1,9 @@
-# evangoh.com update - Haze Watch project card (NOT DEPLOYED)
+# evangoh.com update - Haze Watch project card (DEPLOYED 2026-10-16)
 
-Prepared for review. `PortfolioHome.tsx` in the `egoh33/Auditable-Filing-QA`
-Space is the source of evangoh.com; this folder holds the proposed edit.
+Landed on evangoh.com on 2026-10-16 together with the Space
+(`egoh33/haze-watch`), via the Option B upload below. `PortfolioHome.tsx` in
+the `egoh33/Auditable-Filing-QA` Space is the source of evangoh.com; this
+folder holds the applied edit for the record.
 
 ## Contents
 
@@ -45,14 +47,13 @@ git commit -m "portfolio: add Haze Watch project card"
 git push   # space rebuilds; evangoh.com updates via Cloudflare
 ```
 
-Option B - single-file upload:
+Option B - single-file upload (what was used):
 ```bash
 uv run python -c "from huggingface_hub import HfApi; HfApi().upload_file(
-  path_or_file_or_bytes=open('deploy/site-update/PortfolioHome.tsx','rb').read(),
+  path_or_fileobj='deploy/site-update/PortfolioHome.tsx',
   path_in_repo='frontend/src/pages/PortfolioHome.tsx',
   repo_id='egoh33/Auditable-Filing-QA', repo_type='space',
   commit_message='portfolio: add Haze Watch project card')"
 ```
 
 Deploying the Space rebuilds it - that is the moment evangoh.com changes.
-Nothing here has been uploaded.
