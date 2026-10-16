@@ -1,0 +1,12 @@
+# gitleaks configuration - see https://github.com/gitleaks/gitleaks
+# Extends the default ruleset; only adds allowlists for known-safe files.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Placeholder-only example files and documentation"
+paths = [
+  '''\.env\.example$''',
+  '''^docs/.*\.md$''',
+]

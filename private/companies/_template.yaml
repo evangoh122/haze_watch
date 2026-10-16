@@ -1,0 +1,61 @@
+# HAND-SOURCED PRIVATE DATA. Copy this file to <TICKER>.yaml and fill it from public
+# filings. NEVER commit or publish a filled copy: private/companies/*.yaml is
+# gitignored on purpose (only this template is tracked). Keep real issuer names and
+# parent-subsidiary mappings out of every tracked file.
+#
+# Rules enforced by private/link_ownership.py:
+#   * every statement and ownership link needs a `source_ref` that exists in `citations`
+#   * total_assets == total_liabilities + total_equity
+#   * ebitda == revenue - cash_opex
+# An all-null template FAILS validation on purpose - that is how we avoid inventing
+# numbers. Values are consolidated figures in the PARENT's reporting currency (millions).
+#
+# Before filling: verify the parent -> Indonesian subsidiary link in the annual report
+# (or RSPO ACOP / SPOTT / Trase). Keep attribution "unverified" until a source confirms it.
+
+parent:
+  name: ""                # listed parent company
+  ticker: ""              # exchange ticker
+  exchange: ""            # e.g. "SGX"
+  reporting_currency: ""  # e.g. "USD"
+  fiscal_year_end: ""     # e.g. "12-31"
+  aliases: []             # GFW/BNPB group_attribution strings that map to this parent
+
+ownership:
+  - parent: ""
+    subsidiary: ""        # operating subsidiary that holds the concession title
+    stake_pct: null       # e.g. 92.4
+    as_of: ""             # e.g. "2025-12-31"
+    source_ref: ""        # citation id, e.g. "annual-2025"
+
+# Oldest period first: FY2023, FY2024, FY2025 ...
+statements:
+  - period: "FY2025"
+    revenue: null
+    cash_opex: null
+    ebitda: null            # must equal revenue - cash_opex
+    interest_expense: null
+    cash: null
+    short_term_debt: null
+    long_term_debt: null
+    current_assets: null
+    current_liabilities: null
+    total_assets: null      # must equal total_liabilities + total_equity
+    total_liabilities: null
+    total_equity: null
+    operating_cash_flow: null
+    capex: null
+    source_ref: ""
+
+facilities:
+  - facility: ""            # e.g. "Term loan"
+    ead: null
+    maturity_year: null
+
+# citation id -> where the figure came from (so any number is re-checkable)
+citations: {}
+#  annual-2025:
+#    url: "https://links.sgx.com/..."
+#    page: "Note 24, p.142"
+#    retrieved_on: "2026-10-16"
+#    note: "Net borrowings / EBITDA"
