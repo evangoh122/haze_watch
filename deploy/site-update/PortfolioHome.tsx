@@ -38,6 +38,7 @@ export default function PortfolioHome() {
   const navigate = useNavigate();
   const [swiper, setSwiper] = useState<SwiperClass | null>(null);
   const [activeProject, setActiveProject] = useState(0);
+  const [slideCount, setSlideCount] = useState(3);
   const landingTour = useTour(LANDING_TOUR_KEY);
   const activateCardOnKeyDown = (event: KeyboardEvent<HTMLDivElement>, action: () => void) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -198,7 +199,10 @@ export default function PortfolioHome() {
                 slideRole: 'group',
               }}
               navigation={{ prevEl: '.haze-proj-prev', nextEl: '.haze-proj-next' }}
-              onSwiper={setSwiper}
+              onSwiper={(instance) => {
+                setSwiper(instance);
+                setSlideCount(instance.slides.length);
+              }}
               onSlideChange={(instance) => setActiveProject(instance.activeIndex)}
               className="overflow-hidden haze-proj-swiper"
             >
@@ -383,6 +387,96 @@ export default function PortfolioHome() {
             </div>
                 )}
               </SwiperSlide>
+              <SwiperSlide>
+                {({ isActive }) => (
+            <a
+              data-tour="project-card"
+              href="https://github.com/evangoh122/quant_platform_1"
+              target="_blank"
+              rel="noopener noreferrer"
+              tabIndex={isActive ? 0 : -1}
+              aria-hidden={!isActive}
+              inert={!isActive}
+              className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
+            >
+              <div className="absolute top-0 right-0 w-40 h-40 bg-accent/10 rounded-full blur-3xl group-hover:bg-accent/15 transition-colors pointer-events-none" />
+              <div>
+                <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-accent/8 border border-accent/15 rounded-xl text-accent">
+                      <Database size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl sm:text-2xl font-semibold text-primary tracking-tight">Quant Platform</h3>
+                      <p className="text-[11px] font-mono text-accent-bright">Point-in-time equity research on Databricks</p>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md border border-accent/20 bg-accent/8 text-accent-bright">
+                    Open Source - Repo
+                  </span>
+                </div>
+
+                <div className="mb-6 bg-background/42 border border-white/[0.06] rounded-xl p-4">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-accent-bright mb-3 font-mono">
+                    why it exists
+                  </div>
+                  <p className="text-sm text-secondary leading-7 mb-4 font-light">
+                    A backtest is only as honest as what it was allowed to know. Quant Platform ingests market, options, SEC, COT and macro data with PySpark into a Delta medallion lakehouse, stamps every row with when it became available so features join point-in-time, and lets an LLM-directed agent research a company and save a note through a deterministic validator.
+                  </p>
+                  <div className="grid grid-cols-3 gap-2 text-left">
+                    <div className="bg-white/[0.035] border border-white/[0.06] rounded-lg p-3">
+                      <div className="text-sm font-mono font-semibold text-accent-bright">287M</div>
+                      <div className="text-[10px] text-secondary/70">rows ingested</div>
+                    </div>
+                    <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg p-3">
+                      <div className="text-sm font-mono font-semibold text-accent-bright">5</div>
+                      <div className="text-[10px] text-secondary/70">data domains</div>
+                    </div>
+                    <div className="bg-white/[0.035] border border-white/[0.06] rounded-lg p-3">
+                      <div className="text-sm font-mono font-semibold text-accent-bright">8+</div>
+                      <div className="text-[10px] text-secondary/70">Lakebase tables</div>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-sm text-secondary leading-7 mb-6 font-light max-w-xl">
+                  Real market and filing data, with the limits stated as plainly as the results: signals are labelled an untuned baseline with no predictive edge claimed, and agent writes are validated, idempotent and logged before they reach the database.
+                </p>
+
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="glass-sm p-3.5">
+                    <div className="flex items-center gap-2 text-accent text-xs font-semibold mb-1">
+                      <Network size={13} />
+                      Point-in-time joins
+                    </div>
+                    <p className="text-[11px] text-secondary/70 m-0">Silver stamps information_available_ts so features cannot see the future</p>
+                  </div>
+                  <div className="glass-sm p-3.5">
+                    <div className="flex items-center gap-2 text-accent text-xs font-semibold mb-1">
+                      <ShieldCheck size={13} />
+                      Validated agent writes
+                    </div>
+                    <p className="text-[11px] text-secondary/70 m-0">Allowlist, roles, write scope and idempotency checked before any Lakebase write</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between border-t border-border/30 pt-5 mt-2 flex-wrap gap-3">
+                <div className="flex flex-wrap gap-1.5 max-w-md">
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">Databricks</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">PySpark</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">Delta Lake</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">FastAPI</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">React</span>
+                </div>
+                <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent group-hover:text-accent-bright transition-colors group-hover:underline">
+                  View the repo
+                  <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+                </span>
+              </div>
+            </a>
+                )}
+              </SwiperSlide>
             </Swiper>
           <div className="mt-6 flex items-center justify-center gap-4" role="group" aria-label="Project carousel">
             <button
@@ -393,7 +487,7 @@ export default function PortfolioHome() {
               ‹
             </button>
             <div className="flex items-center gap-2">
-              {[0, 1].map((i) => (
+              {Array.from({ length: slideCount }, (_, i) => (
                 <button
                   key={i}
                   type="button"
