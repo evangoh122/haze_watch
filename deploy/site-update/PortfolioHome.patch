@@ -44,7 +44,7 @@
                className="text-secondary hover:text-primary transition-colors flex items-center gap-1.5"
              >
                <Mail size={15} />
-@@ -170,13 +182,35 @@
+@@ -170,13 +182,36 @@
              </div>
            </div>
  
@@ -52,8 +52,9 @@
 +          <div className="relative max-w-5xl">
 +            <Swiper
 +              modules={[A11y, Keyboard, Navigation]}
-+              slidesPerView={1}
-+              spaceBetween={0}
++              slidesPerView={1.15}
++              spaceBetween={28}
++              centeredSlides
 +              rewind
 +              watchSlidesProgress
 +              keyboard={{ enabled: true }}
@@ -84,7 +85,7 @@
                className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
              >
                <div className="absolute top-0 right-0 w-40 h-40 bg-accent/10 rounded-full blur-3xl group-hover:bg-accent/15 transition-colors pointer-events-none" />
-@@ -255,99 +289,128 @@
+@@ -255,99 +290,128 @@
                  </span>
                </div>
              </div>
@@ -282,7 +283,7 @@
            </div>
          </section>
        </main>
-@@ -363,7 +426,7 @@
+@@ -363,7 +427,7 @@
              </div>
            </div>
            <p className="mt-2 text-[11px] text-secondary/40 leading-relaxed max-w-2xl text-center">

@@ -24,12 +24,16 @@ it reproduces the deployed file byte-for-byte, then writes the patch.
 Replaces the **Enterprise infrastructure / Market data architecture notes**
 (Blueprint) card in the "selected work" section with the **Haze Watch** card and
 converts the two project cards to a **Swiper carousel** (`swiper/react` 14,
-`A11y` + `Keyboard` + `Navigation` modules, one card per view, `rewind` so
-prev/next wrap). The arrows are driven by the Navigation module; the dots stay
-React-rendered from `onSlideChange` so the bespoke Tailwind styling and
-`aria-current` are unchanged. Only `swiper/css` and `swiper/css/a11y` are
-imported, so no default Swiper chrome leaks into the design. Swipe-on-touch and
-ArrowLeft/ArrowRight come with it.
+`A11y` + `Keyboard` + `Navigation` modules) in **center mode**:
+`slidesPerView={1.15}` + `spaceBetween={28}` + `centeredSlides`, so the active
+card sits centred at ~87% of the container with a ~41px peek of the neighbour,
+and `rewind` makes prev/next wrap at the ends. Arrows are driven by the
+Navigation module; the dots stay React-rendered from `onSlideChange` so the
+bespoke Tailwind styling and `aria-current` are unchanged. Only `swiper/css` and
+`swiper/css/a11y` are imported, so no default Swiper chrome leaks into the
+design. ArrowLeft/ArrowRight and touch dragging come with it. Cards stay flat -
+the evidence-heavy content is not something a coverflow tilt should distort
+(`effect="coverflow"` + the EffectCoverflow module is the alternative).
 
 The inactive card is now **`inert`, `aria-hidden` and `tabIndex={-1}`**, applied
 through `SwiperSlide`'s render function (`isActive`). Previously the clipped card
