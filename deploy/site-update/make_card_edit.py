@@ -1,14 +1,12 @@
 """Produce the Haze Watch card edit for evangoh.com (PortfolioHome.tsx).
 
 Replaces the "Enterprise infrastructure / Market data architecture notes"
-(Blueprint) card in the selected-work section with the Haze Watch card, sized
-and styled to match the RAG Workbench card exactly (same product-glass-preview
-shell, min-h-[520px], p-6 sm:p-8, same type scale), and equalizes the section
-grid columns so both cards render at the same size. The card is fully clickable
-(whole-card onClick opens the Space, Enter/Space via keyboard, hover glow +
-border highlight, cursor pointer).
+(Blueprint) card with the Haze Watch card and converts the two project cards to
+a SWIPER carousel (swiper/react, one card per view, prev/next buttons and dot
+indicators, ArrowLeft/ArrowRight, swipe on touch). The inactive slide is marked
+``inert`` + ``aria-hidden`` via SwiperSlide's render function so a keyboard user
+cannot tab into - or activate - the clipped card. Output (NOT uploaded here):
 
-Output (NOT uploaded here):
   deploy/site-update/PortfolioHome.tsx   full edited file
   deploy/site-update/PortfolioHome.patch unified diff against the live version
 
@@ -19,7 +17,7 @@ The source is the LIVE PortfolioHome.tsx from the evangoh.com site repo
 (egoh33/Auditable-Filing-QA). Pass --source, or set PORTFOLIO_HOME_SRC.
 
 Stats shown on the card are project-verified facts only (300 real concession
-polygons from the BNPB/GFW sample run, 24-72h forecast horizons, 46 pipeline
+polygons from the BNPB/GFW sample run, 24-72h forecast horizons, 75 pipeline
 tests measured via `uv run pytest pipelines/tests`). No invented metrics, per
 the portfolio's own disclaimer rules.
 """
@@ -33,18 +31,17 @@ from pathlib import Path
 
 OUT_DIR_DEFAULT = Path(__file__).resolve().parents[2] / "deploy" / "site-update"
 
-# Sizing/styling mirrors the RAG Workbench card (product-glass-preview shell,
-# min-h-[520px], p-6 sm:p-8, same header/box/tile/tag/CTA classes) so the two
-# cards read as one system. Like the RAG card it navigates internally: clicking
-# (or Enter/Space) opens the /haze-watch case-study page, with hover glow +
-# border highlight. The page carries the "Open the app" button to the deployed
-# app (https://egoh33-haze-watch.hf.space).
+# The Haze Watch card content (RAG-card sizing: product-glass-preview shell,
+# min-h-[520px], p-6 sm:p-8). Navigates internally to the /haze-watch
+# case-study page like the RAG card navigates to /rag-overview.
 CARD = """            <div
               data-tour="project-card"
-              onClick={() => navigate('/haze-watch')}
-              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/haze-watch'))}
+              onClick={() => navigate('/projects/haze-watch')}
+              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/projects/haze-watch'))}
               role="button"
-              tabIndex={0}
+              tabIndex={isActive ? 0 : -1}
+              aria-hidden={!isActive}
+              inert={!isActive}
               className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
             >
               <div className="absolute top-0 right-0 w-40 h-40 bg-accent/10 rounded-full blur-3xl group-hover:bg-accent/15 transition-colors pointer-events-none" />
@@ -81,7 +78,7 @@ CARD = """            <div
                       <div className="text-[10px] text-secondary/70">hazard horizons</div>
                     </div>
                     <div className="bg-white/[0.035] border border-white/[0.06] rounded-lg p-3">
-                      <div className="text-sm font-mono font-semibold text-accent-bright">46</div>
+                      <div className="text-sm font-mono font-semibold text-accent-bright">75</div>
                       <div className="text-[10px] text-secondary/70">pipeline tests</div>
                     </div>
                   </div>
@@ -124,19 +121,121 @@ CARD = """            <div
               </div>
             </div>"""
 
+CAROUSEL_OPEN = """          <div className="relative max-w-5xl">
+            <Swiper
+              modules={[A11y, Keyboard, Navigation]}
+              slidesPerView={1}
+              spaceBetween={0}
+              rewind
+              watchSlidesProgress
+              keyboard={{ enabled: true }}
+              a11y={{
+                enabled: true,
+                containerMessage: 'Selected work',
+                containerRoleDescriptionMessage: 'carousel',
+                slideRole: 'group',
+              }}
+              navigation={{ prevEl: '.haze-proj-prev', nextEl: '.haze-proj-next' }}
+              onSwiper={setSwiper}
+              onSlideChange={(instance) => setActiveProject(instance.activeIndex)}
+              className="overflow-hidden"
+            >
+              <SwiperSlide>
+                {({ isActive }) => ("""
+
+SLIDE_BOUNDARY_OLD = """            </div>
+
+            <div
+              onClick={() => navigate('/rag', { state: { initialView: 'stocks' } })}"""
+
+SLIDE_BOUNDARY_NEW = """            </div>
+                )}
+              </SwiperSlide>
+
+              <SwiperSlide>
+                {({ isActive }) => (
+            <div
+              onClick={() => navigate('/rag', { state: { initialView: 'stocks' } })}"""
+
+CAROUSEL_TAIL = """            </div>
+                )}
+              </SwiperSlide>
+            </Swiper>
+          <div className="mt-6 flex items-center justify-center gap-4" role="group" aria-label="Project carousel">
+            <button
+              type="button"
+              aria-label="Previous project"
+              className="haze-proj-prev flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-surface-elevated/40 text-secondary transition-colors hover:border-accent/50 hover:text-primary cursor-pointer"
+            >
+              ‹
+            </button>
+            <div className="flex items-center gap-2">
+              {[0, 1].map((i) => (
+                <button
+                  key={i}
+                  type="button"
+                  aria-label={`Show project ${i + 1}`}
+                  aria-current={activeProject === i}
+                  onClick={() => swiper?.slideTo(i)}
+                  className={`h-2 rounded-full transition-all duration-200 cursor-pointer ${activeProject === i ? 'w-6 bg-accent' : 'w-2 bg-border hover:bg-secondary'}`}
+                />
+              ))}
+            </div>
+            <button
+              type="button"
+              aria-label="Next project"
+              className="haze-proj-next flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-surface-elevated/40 text-secondary transition-colors hover:border-accent/50 hover:text-primary cursor-pointer"
+            >
+              ›
+            </button>
+          </div>
+          </div>
+        </section>"""
+
 
 def edit(source: Path, out_dir: Path) -> Path:
     original = source.read_text(encoding="utf-8")
     text = original
 
-    # 1) lucide imports: add Flame + ShieldCheck; drop Cpu (only the replaced
-    #    card used it - an unused import breaks the site's typecheck).
+    # 1) imports: useState for the carousel; lucide adds Flame + ShieldCheck and
+    #    drops Cpu (only the replaced card used it - unused breaks typecheck).
     old_import = "import { Mail, ArrowRight, Cpu, Network, Database, Search, Sparkles } from 'lucide-react';"
     new_import = "import { Mail, ArrowRight, Network, Database, Search, Sparkles, Flame, ShieldCheck } from 'lucide-react';"
-    assert old_import in text, "import line not found"
+    assert old_import in text, "lucide import line not found"
     text = text.replace(old_import, new_import)
 
-    # 2) accessible names below sm: the visible labels hide on small screens, so
+    old_react_import = "import type { KeyboardEvent } from 'react';"
+    assert old_react_import in text, "react import line not found"
+    text = text.replace(
+        old_react_import, "import { useState } from 'react';\n" + old_react_import
+    )
+
+    # 1b) Swiper drives the carousel; only the core + a11y stylesheets are pulled
+    #     in, so the bespoke Tailwind button/dot styling is unchanged.
+    disclaimer_import = "import { DisclaimerFooter } from '../components/Disclaimer';"
+    assert disclaimer_import in text, "DisclaimerFooter import not found"
+    text = text.replace(
+        disclaimer_import,
+        disclaimer_import
+        + "\nimport { Swiper, SwiperSlide } from 'swiper/react';"
+        + "\nimport type { SwiperClass } from 'swiper/react';"
+        + "\nimport { A11y, Keyboard, Navigation } from 'swiper/modules';"
+        + "\nimport 'swiper/css';"
+        + "\nimport 'swiper/css/a11y';",
+    )
+
+    # 2) carousel state: the instance for dot navigation + the active index for
+    #    aria-current (Swiper itself does not re-render React on slide change)
+    old_nav = "  const navigate = useNavigate();"
+    assert old_nav in text, "navigate declaration not found"
+    text = text.replace(
+        old_nav,
+        old_nav
+        + "\n  const [swiper, setSwiper] = useState<SwiperClass | null>(null);"
+        + "\n  const [activeProject, setActiveProject] = useState(0);",
+    )
+
+    # 3) accessible names below sm: the visible labels hide on small screens, so
     #    LinkedIn/Contact need aria-labels like the GitHub link already has.
     linkedin_anchor = (
         '              href="https://www.linkedin.com/in/eevangoh/"\n'
@@ -159,7 +258,7 @@ def edit(source: Path, out_dir: Path) -> Path:
         + "              title=\"Contact\"\n",
     )
 
-    # 3) footer disclaimer must not contradict the card's synthetic-data label.
+    # 4) footer disclaimer must not contradict the card's synthetic-data label.
     old_footer = "All data is publicly sourced and not related to my work."
     new_footer = (
         "Environmental data is publicly sourced; demo companies and financial "
@@ -168,14 +267,43 @@ def edit(source: Path, out_dir: Path) -> Path:
     assert old_footer in text, "footer disclaimer not found"
     text = text.replace(old_footer, new_footer)
 
-    # 4) equalize the two project-card columns (was 1.12fr / 0.88fr) so both
-    #    cards render at the same width.
-    old_grid = '<div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.12fr)_minmax(280px,0.88fr)] gap-5 lg:gap-6 max-w-5xl">'
-    new_grid = '<div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-6 max-w-5xl">'
-    assert old_grid in text, "projects grid not found"
-    text = text.replace(old_grid, new_grid)
+    # 4b) RAG card: its story moves to the wildcard-safe /projects path (the
+    #     app keeps owning /rag). /rag-overview* would also work but /projects/
+    #     is the convention shared with /projects/haze-watch.
+    rag_links = text.count("navigate('/rag-overview')")
+    assert rag_links == 2, f"expected 2 RAG card links, found {rag_links}"
+    text = text.replace("navigate('/rag-overview')", "navigate('/projects/rag-workbench')")
 
-    # 5) replace the Enterprise infrastructure (Blueprint) card in place.
+    # 5) grid -> carousel shell (outer > Swiper > slide 1 > render prop)
+    old_grid = '          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.12fr)_minmax(280px,0.88fr)] gap-5 lg:gap-6 max-w-5xl">'
+    assert old_grid in text, "projects grid not found"
+    text = text.replace(old_grid, CAROUSEL_OPEN)
+
+    # 5b) the first card is a slide now: it is interactive only while active, so
+    #     its clipped state is inert and untabbable (same treatment as the Haze
+    #     card below). This is the accessibility fix the Swiper migration brings.
+    rag_tag_old = (
+        "              onClick={() => navigate('/projects/rag-workbench')}\n"
+        "              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/projects/rag-workbench'))}\n"
+        '              role="button"\n'
+        "              tabIndex={0}"
+    )
+    rag_tag_new = (
+        "              onClick={() => navigate('/projects/rag-workbench')}\n"
+        "              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/projects/rag-workbench'))}\n"
+        '              role="button"\n'
+        "              tabIndex={isActive ? 0 : -1}\n"
+        "              aria-hidden={!isActive}\n"
+        "              inert={!isActive}"
+    )
+    assert rag_tag_old in text, "RAG card tag not found"
+    text = text.replace(rag_tag_old, rag_tag_new)
+
+    # 6) close slide 1 / open slide 2 between the two cards
+    assert SLIDE_BOUNDARY_OLD in text, "card boundary not found"
+    text = text.replace(SLIDE_BOUNDARY_OLD, SLIDE_BOUNDARY_NEW)
+
+    # 7) replace the Enterprise infrastructure (Blueprint) card with Haze Watch
     start_marker = "            <div\n              onClick={() => navigate('/rag', { state: { initialView: 'stocks' } })}"
     cta_marker = "                  Explore charts"
     start = text.find(start_marker)
@@ -185,6 +313,14 @@ def edit(source: Path, out_dir: Path) -> Path:
     end = text.find("\n            </div>\n", cta)
     assert end != -1, "Enterprise card end not found"
     text = text[:start] + CARD + "\n" + text[end + len("\n            </div>\n") :]
+
+    # 8) close the carousel after the second card and add the controls
+    tail_old = "            </div>\n          </div>\n        </section>"
+    cta = text.find("                  View case study")
+    assert cta != -1, "Haze card CTA not found"
+    tail_at = text.find(tail_old, cta)
+    assert tail_at != -1, "projects section tail not found"
+    text = text[:tail_at] + CAROUSEL_TAIL + text[tail_at + len(tail_old) :]
 
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "PortfolioHome.tsx").write_text(text, encoding="utf-8")
@@ -203,7 +339,13 @@ def edit(source: Path, out_dir: Path) -> Path:
     print(f"patch written: {out_dir / 'PortfolioHome.patch'} ({len(patch.splitlines())} lines)")
     print(f"Haze Watch cards: {text.count('Geospatial climate risk for lenders')}")
     print(f"Enterprise cards left: {text.count('Market data architecture notes')}")
-    print(f"min-h-[520px] cards: {text.count('min-h-[520px]')}")
+    print(
+        "carousel markers: "
+        f"SwiperSlide={text.count('<SwiperSlide>')}, "
+        f"dots={text.count('Show project')}, "
+        f"inert={text.count('inert={!isActive}')}, "
+        f"arrowKeys={text.count('.haze-proj-next')}"
+    )
     return out_dir / "PortfolioHome.tsx"
 
 
