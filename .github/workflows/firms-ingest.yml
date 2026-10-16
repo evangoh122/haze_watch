@@ -1,30 +1,50 @@
-name: FIRMS ingest (scheduled)
+name: FIRMS history -> GeoParquet (HF)
 
 on:
   schedule:
-    # Daily at 02:17 UTC. Adjust the cadence to taste.
+    # Daily at 02:17 UTC - keeps the rolling history fresh.
     - cron: "17 2 * * *"
   workflow_dispatch:
+    inputs:
+      start_date:
+        description: "YYYY-MM-DD start of a historical backfill (empty = trailing window)"
+        required: false
+        default: ""
+      backfill_days:
+        description: "Days to fetch from --start-date (or trailing, when start_date is empty)"
+        required: false
+        default: "7"
+      sensor:
+        description: "FIRMS sensor (MODIS_NRT, VIIRS_SNPP_NRT, VIIRS_NOAA20_NRT, VIIRS_NOAA21_NRT)"
+        required: false
+        default: "MODIS_NRT"
 
 permissions:
   contents: read
 
 jobs:
-  pull:
+  sync:
     runs-on: ubuntu-latest
     env:
       # Free MAP_KEY: https://firms.modaps.eosdis.nasa.gov/api/map_key/
       HAZE_FIRMS_API_KEY: ${{ secrets.FIRMS_API_KEY }}
+      # HF write token for egoh33/haze-watch-historical (GeoParquet history store)
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@v5
 
-      - name: Check for a FIRMS key
+      - name: Check for required secrets
         id: key
         run: |
           if [ -z "${HAZE_FIRMS_API_KEY}" ]; then
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::FIRMS_API_KEY secret is not set - skipping the pull."
+            echo "::notice::FIRMS_API_KEY secret is not set - skipping the sync."
+          elif [ -z "${HF_TOKEN}" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::HF_TOKEN secret is not set - skipping the sync."
           else
             echo "present=true" >> "$GITHUB_OUTPUT"
           fi
@@ -33,17 +53,19 @@ jobs:
         if: steps.key.outputs.present == 'true'
         run: uv sync --all-packages
 
-      - name: Pull the last 3 days of detections (Indonesia bbox)
+      - name: Sync detections into HF history as GeoParquet
         if: steps.key.outputs.present == 'true'
         run: |
-          uv run haze-pipelines ingest-firms --from-api --days 3 \
-            --out data/processed/fire_hotspots.parquet
+          uv run python scripts/sync_firms_history_to_hf.py \
+            --sensor "${{ inputs.sensor || 'MODIS_NRT' }}" \
+            --backfill-days "${{ inputs.backfill_days || '7' }}" \
+            --start-date "${{ inputs.start_date || '' }}"
 
-      - name: Upload the hotspot parquet
+      - name: Upload the GeoParquet year files (debug artifact)
         if: steps.key.outputs.present == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: fire_hotspots
-          path: data/processed/fire_hotspots.parquet
+          name: firms-history-geoparquet
+          path: data/history_geo/year=*.parquet
           if-no-files-found: error
           retention-days: 7

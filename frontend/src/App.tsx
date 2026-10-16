@@ -104,6 +104,13 @@ export default function App() {
           </span>
         </div>
 
+        <a
+          href="https://www.evangoh.com"
+          className="mb-4 mt-[-18px] flex items-center gap-1.5 px-2 font-mono text-[10px] uppercase tracking-[0.13em] text-[#8e9bae] transition-colors hover:text-white"
+        >
+          ← Back to portfolio
+        </a>
+
         <p className="px-[10px] pb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.13em] text-[#8e9bae]">
           Workspace
         </p>
