@@ -325,8 +325,15 @@ def validate_exposure(df: pd.DataFrame, *, dataset: str = "exposure") -> Quality
 
     report.add("non_empty", len(df) > 0, f"{len(df)} rows", count=len(df))
 
-    negative = int((df[["hotspot_count_in_polygon_30d", "hotspot_count_near_30d"]] < 0).sum().sum())
-    report.add("counts_non_negative", negative == 0, "detection counts >= 0", count=negative)
+    counts = df[["hotspot_count_in_polygon_30d", "hotspot_count_near_30d"]]
+    # NaN fails too: a null count is not a valid ">= 0" count.
+    negative = int(((counts < 0) | counts.isna()).sum().sum())
+    report.add(
+        "counts_non_negative",
+        negative == 0,
+        "detection counts >= 0 and not null",
+        count=negative,
+    )
 
     # Near-buffer counts must include in-polygon detections.
     inconsistent = int((df["hotspot_count_near_30d"] < df["hotspot_count_in_polygon_30d"]).sum())

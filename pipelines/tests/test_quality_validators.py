@@ -5,6 +5,7 @@ import pandas as pd
 from haze_pipelines.quality import (
     FEATURE_COLUMNS,
     FORECAST_COLUMNS,
+    validate_exposure,
     validate_features,
     validate_forecast,
 )
@@ -97,3 +98,16 @@ def test_forecast_validator_requires_baseline_labeling():
     df.loc[0, "disclaimer"] = None
     report = validate_forecast(df)
     assert any(c.name == "labeled_baseline" and not c.passed for c in report.checks)
+
+
+def test_exposure_validator_rejects_null_counts():
+    df = pd.DataFrame(
+        {
+            "polygon_id": ["poly_a", "poly_b"],
+            "hotspot_count_in_polygon_30d": [0.0, float("nan")],
+            "hotspot_count_near_30d": [1.0, 2.0],
+        }
+    )
+    report = validate_exposure(df)
+    assert not report.passed
+    assert any(c.name == "counts_non_negative" and not c.passed for c in report.checks)
