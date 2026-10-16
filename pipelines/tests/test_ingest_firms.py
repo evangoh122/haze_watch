@@ -220,6 +220,22 @@ def test_fetch_firms_range_chunks_windows_and_dedups():
     assert len(df) == 2  # same 2 rows returned every window -> deduplicated
 
 
+def test_fetch_firms_range_pacing_is_configurable():
+    """Pacing must be tunable: the quota wall is ~50 requests/min, not 240."""
+    client = _FakeClient(FIRMS_CSV)
+    sleeps: list[float] = []
+    fetch_firms_range(
+        "94,-11.5,141.5,6.5",
+        "2015-09-01",
+        12,
+        api_key="KEY",
+        client=client,
+        sleep=sleeps.append,
+        pace_seconds=1.5,
+    )
+    assert sleeps == [1.5, 1.5]
+
+
 def test_ingest_from_api_backfill_registers_range(tmp_path):
     settings_obj = Settings(data_dir=tmp_path, firms_api_key="KEY")
     out = tmp_path / "processed" / "fire_hotspots.parquet"
@@ -305,6 +321,36 @@ def test_fetch_firms_area_final_failure_surfaces_notice_not_key():
         )
     assert "Invalid MAP_KEY" in str(exc.value)  # FIRMS' reason reaches the log
     assert "SECRETKEY123" not in str(exc.value)  # the key never does
+
+
+def test_fetch_firms_area_quota_wall_backs_off_for_minutes():
+    """The measured MAP_KEY wall is ~500 requests / 10 min.
+
+    Observed 2026-10-16: a lone VIIRS_NOAA20_SP lane raised "Exceeding allowed
+    transaction limit." after ~499 windows in ~10 min. Retrying after the 0.5-30s
+    transient backoff just hits the same wall, so this notice must wait minutes.
+    """
+    client = _SequenceClient(
+        [(400, "Exceeding allowed transaction limit."), (200, FIRMS_CSV)]
+    )
+    sleeps: list[float] = []
+    df = fetch_firms_area(
+        "94,-11.5,141.5,6.5", 3, api_key="KEY", client=client, sleep=sleeps.append
+    )
+
+    assert len(df) == 2
+    assert len(sleeps) == 1
+    assert sleeps[0] >= 60.0  # minutes, not the <=30s transient backoff
+
+
+def test_fetch_firms_area_transient_error_keeps_the_short_backoff():
+    """A generic 400 must not pay the multi-minute quota wait."""
+    client = _SequenceClient([(400, "Bad Request"), (200, FIRMS_CSV)])
+    sleeps: list[float] = []
+    fetch_firms_area(
+        "94,-11.5,141.5,6.5", 3, api_key="KEY", client=client, sleep=sleeps.append
+    )
+    assert sleeps[0] <= 30.0
 
 
 def test_fetch_firms_range_stops_at_today():

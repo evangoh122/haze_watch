@@ -22,9 +22,16 @@ on:
 permissions:
   contents: read
 
-# One lane at a time: all sensors share a single MAP_KEY, and parallel runs
-# burst into transient HTTP 400s (observed 2026-10-16: four lanes died in the
-# same 2-second window). Queued runs wait; nothing is cancelled.
+# One lane at a time: all sensors share a single MAP_KEY, whose measured wall is
+# ~500 requests / 10 min (observed 2026-10-16: four parallel lanes died inside
+# the same 2 seconds at ~440 requests combined; a lone lane died at ~499 windows
+# with "Exceeding allowed transaction limit.").
+#
+# Dispatch backfills ONE AT A TIME and wait for each to finish. GitHub holds at
+# most one pending run per concurrency group and cancels the older waiting run
+# when a newer one joins the group, so firing four together silently drops
+# lanes - cancel-in-progress: false only protects the run already executing.
+# The daily schedule run can likewise cancel a waiting backfill.
 concurrency:
   group: firms-api
   cancel-in-progress: false

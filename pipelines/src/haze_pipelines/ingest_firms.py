@@ -187,11 +187,36 @@ _EMPTY_WINDOW_NOTICES = {"no hotspots available", "no data available"}
 MAX_DAYS_PER_REQUEST = 5
 
 
+# The MAP_KEY quota wall, in FIRMS' own words. NASA documents 5,000 transactions
+# / 10 min, but the observed wall is far lower: on 2026-10-16 a lone
+# VIIRS_NOAA20_SP lane raised exactly this notice after ~499 windows in ~10 min,
+# and four parallel lanes died within the same 2 seconds at ~440 requests
+# combined. Treat it as ~500 / 10 min.
+_RATE_LIMIT_NOTICES = ("exceeding allowed transaction limit",)
+
+
+def _is_rate_limit_notice(body: str) -> bool:
+    lowered = body.lower()
+    return any(notice in lowered for notice in _RATE_LIMIT_NOTICES)
+
+
 def _backoff_seconds(attempt: int) -> float:
     """Exponential backoff with jitter (shared-key bursts must not synchronize)."""
     import random
 
     return min(30.0, 2.0**attempt) * (0.5 + random.random())
+
+
+def _rate_limit_backoff_seconds(attempt: int) -> float:
+    """Wait out the quota window instead of retrying into it.
+
+    The wall clears on a ~10 min rolling window, so the 30 s transient backoff is
+    useless here: attempts wait ~2, ~4 and ~8 min (capped at 10) before giving up,
+    which is enough to clear the window on a long checkpointed backfill.
+    """
+    import random
+
+    return min(600.0, 120.0 * (2.0**attempt)) * (0.75 + 0.5 * random.random())
 
 
 def fetch_firms_area(
@@ -260,7 +285,11 @@ def fetch_firms_area(
                     f"{date or 'today'}): {body[:200]}"
                 )
             if sleep is not None:
-                sleep(_backoff_seconds(attempt))
+                # A quota wall needs minutes, not the transient seconds.
+                if _is_rate_limit_notice(body):
+                    sleep(_rate_limit_backoff_seconds(attempt))
+                else:
+                    sleep(_backoff_seconds(attempt))
     finally:
         if own_client:
             client.close()
@@ -313,6 +342,7 @@ def fetch_firms_range(
     client: httpx.Client | None = None,
     sensor: str = "MODIS_NRT",
     window_days: int = MAX_DAYS_PER_REQUEST,
+    pace_seconds: float = 1.0,
     sleep=time.sleep,
     progress=None,
 ) -> pd.DataFrame:
@@ -321,8 +351,15 @@ def fetch_firms_range(
     The area API takes ``DAY_RANGE`` + ``DATE`` (returns DATE..DATE+DAY_RANGE-1),
     so a range is one request per window. Rows are deduplicated across windows on
     ``hotspot_id`` (stable hash of source/lat/lon/time), so overlapping or retried
-    windows never double-count a detection. Gentle pacing between requests keeps
-    well inside the MAP_KEY quota (5,000 transactions / 10 min).
+    windows never double-count a detection.
+
+    ``pace_seconds`` spaces the requests. The measured MAP_KEY wall is ~500
+    requests / 10 min (not the 5,000 NASA's docs advertise - see
+    ``_RATE_LIMIT_NOTICES``). The round trip itself costs ~0.9 s, so the 1.0 s
+    default lands near 32 windows/min (~320 / 10 min, about two thirds of the
+    wall) and leaves headroom for the daily job and ad-hoc probes. A lane that
+    still trips the wall backs off for minutes via
+    ``_rate_limit_backoff_seconds``.
     """
     from datetime import date as date_cls
     from datetime import timedelta
@@ -362,8 +399,8 @@ def fetch_firms_range(
             )
         )
         offset += span
-        if offset < backfill_days and sleep is not None:
-            sleep(0.25)
+        if offset < backfill_days and sleep is not None and pace_seconds:
+            sleep(pace_seconds)
 
     if not frames:
         return pd.DataFrame()
