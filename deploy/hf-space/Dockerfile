@@ -19,6 +19,11 @@
 
 FROM node:20-slim AS frontend-build
 WORKDIR /build
+# The image serves the app at evangoh.com/haze-watch, so the SPA is built with
+# the matching path prefix. Pass --build-arg VITE_BASE_PATH=/ for a root-served
+# image (see docs/deployment.md).
+ARG VITE_BASE_PATH=/haze-watch/
+ENV VITE_BASE_PATH=${VITE_BASE_PATH}
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
@@ -39,8 +44,11 @@ COPY backend/ ./backend/
 RUN pip install --no-cache-dir ./backend
 
 # Pipeline outputs baked into the image (precomputed exposure layer, registry).
-# Real-restricted plantation_polygons.parquet is NOT included - the public layer
-# exposure_public.geojson (anonymized, simplified) is the distributable form.
+# NOTE: these are gitignored, so the processed files must exist before building -
+# run the pipeline first (make ingest-firms / ingest-weather / build-features /
+# run-exposure) or copy them in. Real-restricted plantation_polygons.parquet is
+# NOT included - the public layer exposure_public.geojson (anonymized,
+# simplified) is the distributable form.
 COPY data/processed/exposure_public.geojson /app/data/processed/exposure_public.geojson
 COPY data/processed/exposure.summary.json /app/data/processed/exposure.summary.json
 COPY data/processed/fire_hotspots.parquet /app/data/processed/fire_hotspots.parquet

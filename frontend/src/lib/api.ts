@@ -1,15 +1,16 @@
 ﻿/**
  * Typed fetch wrapper for the backend API.
  *
- * Defaults to the same-origin `/api/v1` path so the app works from any host
- * (dev proxy and Docker/SPA hosting) instead of pointing at the viewer's own
- * machine. Set VITE_API_BASE_URL only for cross-origin backends.
+ * Derived from the Vite base so the same build works at the root and under a
+ * path prefix (e.g. served at /haze-watch/, the API is /haze-watch/api/v1).
+ * Set VITE_API_BASE_URL only for a cross-origin backend.
  *
  * All commercial/financial payloads are synthetic and carry `synthetic: true`.
  * See docs/api-contract.md for the planned contract.
  */
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
+export const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ?? `${import.meta.env.BASE_URL}api/v1`;
 
 export async function apiGet<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`);
