@@ -19,6 +19,10 @@ folder holds the applied edit for the record. The stories were later moved to
 against the pre-edit page (`da7e546:frontend/src/pages/PortfolioHome.tsx`) and
 it reproduces the deployed file byte-for-byte, then writes the patch.
 
+One piece of the carousel lives outside this file - the sizing/scale rules are
+in the site's `frontend/src/index.css` (see "Carousel CSS" below), because they
+have to target Swiper's own `.swiper-slide` markup.
+
 ## The edit
 
 Replaces the **Enterprise infrastructure / Market data architecture notes**
@@ -83,6 +87,44 @@ Card claims are project-verified facts only: 300 real concession polygons
 corrected from 68 to 75 after the FIRMS long-backfill retry/checkpoint/backoff
 work landed.
 
+## Carousel CSS (`frontend/src/index.css`)
+
+The page carries the markup (Swiper + the `haze-proj-swiper` hook class); the
+sizing rules live in the site's `index.css`, because they have to target Swiper's
+own `.swiper-slide` elements. They are deliberately **unlayered**: Tailwind 4 puts
+utilities/components into cascade layers, `swiper/css` is imported unlayered, and
+unlayered declarations beat layered ones regardless of specificity - the same
+rules inside `@layer components` silently do nothing (Swiper's
+`.swiper-slide { display: block }` keeps winning).
+
+```css
+.haze-proj-swiper .swiper-slide {
+  height: auto;
+  align-self: stretch;
+  display: flex;
+}
+
+.haze-proj-swiper .swiper-slide > * {
+  width: 100%;
+  transition: scale 500ms ease, opacity 500ms ease;
+}
+
+.haze-proj-swiper .swiper-slide:not(.swiper-slide-active) > * {
+  scale: 0.93;
+  opacity: 0.7;
+}
+```
+
+Why:
+
+- The wrapper stretches its slides and each slide is a flex box with the card
+  filling it, so **both cards are 634px**. Without it each card hugs its own
+  content and the shorter one (RAG Workbench, 578px) renders smaller than the
+  Haze Watch card (634px) - even when it is the selected card.
+- The non-active card is scaled to 0.93 and dimmed to 0.7, so the selected card
+  is visibly the bigger one: **634x887 active vs 590x825 side**, in both
+  directions.
+
 ## Review checklist (for DeepSeek / human)
 
 - [ ] Copy accuracy (no unsupported claims, no employer references)
@@ -91,9 +133,10 @@ work landed.
 - [ ] Layout: both project cards share one size system
       (`product-glass-preview ... min-h-[520px]`, equal `lg:grid-cols-2`
       columns); card is clickable with hover highlight
-- [ ] Carousel: one card per view, arrows/dots/arrow-keys work, the inactive
-      slide is inert and untabbable (verified in headless Chromium against the
-      deployed bundle: 19/19 checks)
+- [ ] Carousel: center mode, the selected card full size and the neighbour scaled
+      down (634x887 active vs 590x825 side, equal 634px base height); arrows, dots
+      and arrow-keys work; the inactive slide is inert and untabbable. Verified in
+      headless Chromium against the deployed bundle: 19/19 checks.
 
 ## Deploy procedure (after approval)
 

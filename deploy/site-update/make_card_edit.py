@@ -139,7 +139,7 @@ CAROUSEL_OPEN = """          <div className="relative max-w-5xl">
               navigation={{ prevEl: '.haze-proj-prev', nextEl: '.haze-proj-next' }}
               onSwiper={setSwiper}
               onSlideChange={(instance) => setActiveProject(instance.activeIndex)}
-              className="overflow-hidden"
+              className="overflow-hidden haze-proj-swiper"
             >
               <SwiperSlide>
                 {({ isActive }) => ("""
