@@ -21,15 +21,23 @@ The card is sized and styled to the RAG Workbench card's system so both read as
 one design: `product-glass-preview` shell, `p-6 sm:p-8`, `min-h-[520px]`, same
 type scale and tile/tag/CTA classes, and the section grid is equalized
 (`lg:grid-cols-2`, was `1.12fr / 0.88fr`) so both cards render at the same
-width. The card is fully clickable (whole-card click opens the Space,
-Enter/Space keyboard activation, hover glow + border highlight, pointer
-cursor), matching the RAG card's affordances.
+width. Like the RAG card, it navigates internally: clicking the card (or
+Enter/Space) opens the **`/haze-watch` case-study page** on evangoh.com, which
+carries the "Open the app" button to the deployed app
+(`https://egoh33-haze-watch.hf.space`), hover glow + border highlight included.
 
 The edit also carries three small fixes to the existing page: aria-labels on
 the LinkedIn/Contact header links (their visible labels hide below `sm`, unlike
 the GitHub link), a reworded footer disclaimer ("All data is publicly sourced"
 contradicted the card's synthetic-data label), and the lucide import line (adds
 Flame/ShieldCheck, drops Cpu - only the replaced card used it).
+
+The `/haze-watch` page itself is added to the site repo as
+`frontend/src/pages/HazeWatch.tsx` with a route in `frontend/src/App.tsx`
+(commit `b6bf2c8` on `egoh33/Auditable-Filing-QA`), mirroring `RagOverview`'s
+structure and claim discipline (300 real concession polygons, 24-72h horizons,
+46 pipeline tests; synthetic commercial data labeled; hazard scores are
+baselines; detections are not burned area).
 
 Card claims are project-verified facts only: 300 real concession polygons
 (BNPB/GFW sample run), 24-72h hazard horizons, 46 pipeline tests (measured via

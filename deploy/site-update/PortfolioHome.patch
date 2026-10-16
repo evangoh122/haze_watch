@@ -40,8 +40,8 @@
 -              onClick={() => navigate('/rag', { state: { initialView: 'stocks' } })}
 -              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/rag', { state: { initialView: 'stocks' } }))}
 +              data-tour="project-card"
-+              onClick={() => window.open('https://huggingface.co/spaces/egoh33/haze-watch', '_blank', 'noopener,noreferrer')}
-+              onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); window.open('https://huggingface.co/spaces/egoh33/haze-watch', '_blank', 'noopener,noreferrer'); } }}
++              onClick={() => navigate('/haze-watch')}
++              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/haze-watch'))}
                role="button"
                tabIndex={0}
 -              className="glass-card hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 relative group overflow-hidden cursor-pointer lg:mt-16 min-h-[430px]"
@@ -182,7 +182,7 @@
                  </div>
                  <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent group-hover:text-accent-bright transition-colors group-hover:underline">
 -                  Explore charts
-+                  Open live demo
++                  View case study
                    <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
                  </span>
                </div>

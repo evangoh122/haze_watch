@@ -262,8 +262,8 @@ export default function PortfolioHome() {
 
             <div
               data-tour="project-card"
-              onClick={() => window.open('https://huggingface.co/spaces/egoh33/haze-watch', '_blank', 'noopener,noreferrer')}
-              onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); window.open('https://huggingface.co/spaces/egoh33/haze-watch', '_blank', 'noopener,noreferrer'); } }}
+              onClick={() => navigate('/haze-watch')}
+              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/haze-watch'))}
               role="button"
               tabIndex={0}
               className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
@@ -339,7 +339,7 @@ export default function PortfolioHome() {
                   <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">DuckDB</span>
                 </div>
                 <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent group-hover:text-accent-bright transition-colors group-hover:underline">
-                  Open live demo
+                  View case study
                   <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
                 </span>
               </div>
