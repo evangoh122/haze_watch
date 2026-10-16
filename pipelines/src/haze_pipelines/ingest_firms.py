@@ -285,8 +285,10 @@ def fetch_firms_area(
                     f"{date or 'today'}): {body[:200]}"
                 )
             if sleep is not None:
-                # A quota wall needs minutes, not the transient seconds.
-                if _is_rate_limit_notice(body):
+                # A quota wall needs minutes, not the transient seconds. HTTP 429
+                # says rate-limited even when the body is an intermediary's rather
+                # than FIRMS' own notice.
+                if status == 429 or _is_rate_limit_notice(body):
                     sleep(_rate_limit_backoff_seconds(attempt))
                 else:
                     sleep(_backoff_seconds(attempt))

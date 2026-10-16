@@ -353,6 +353,17 @@ def test_fetch_firms_area_transient_error_keeps_the_short_backoff():
     assert sleeps[0] <= 30.0
 
 
+def test_fetch_firms_area_http_429_waits_out_the_window_regardless_of_body():
+    """429 means rate-limited even when the body is an intermediary's, not FIRMS'."""
+    client = _SequenceClient([(429, "Too Many Requests"), (200, FIRMS_CSV)])
+    sleeps: list[float] = []
+    df = fetch_firms_area(
+        "94,-11.5,141.5,6.5", 3, api_key="KEY", client=client, sleep=sleeps.append
+    )
+    assert len(df) == 2
+    assert sleeps[0] >= 60.0
+
+
 def test_fetch_firms_range_stops_at_today():
     """Future windows must not be requested - a long backfill stops, not fails."""
     from datetime import date as date_cls
