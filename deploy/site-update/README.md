@@ -15,14 +15,17 @@ folder holds the applied edit for the record.
 
 ## The edit
 
-Adds a **Haze Watch** card to the "selected work" section in the same style as
-the RAG Workbench card (glass preview, why-it-exists box, stat tiles, feature
-tiles, tag pills, CTA). It opens the Haze Watch HF Space in a new tab.
+Replaces the **Enterprise infrastructure / Market data architecture notes**
+(Blueprint) card in the "selected work" section with the **Haze Watch** card -
+same slot, size and structure (icon header, why-it-exists box, stat tiles,
+pipeline note, feature tiles, tag pills). It opens the Haze Watch HF Space
+(`https://huggingface.co/spaces/egoh33/haze-watch`) in a new tab.
 
-The same edit also carries three small review fixes to the existing page:
-aria-labels on the LinkedIn/Contact header links (their visible labels hide
-below `sm`, unlike the GitHub link) and a reworded footer disclaimer ("All data
-is publicly sourced" contradicted the card's synthetic-data label).
+The edit also carries three small fixes to the existing page: aria-labels on
+the LinkedIn/Contact header links (their visible labels hide below `sm`, unlike
+the GitHub link), a reworded footer disclaimer ("All data is publicly sourced"
+contradicted the card's synthetic-data label), and the lucide import line (adds
+Flame/ShieldCheck, drops Cpu - only the replaced card used it).
 
 Card claims are project-verified facts only: 300 real concession polygons
 (BNPB/GFW sample run), 24-72h hazard horizons, 46 pipeline tests (measured via
@@ -31,9 +34,10 @@ Card claims are project-verified facts only: 300 real concession polygons
 ## Review checklist (for DeepSeek / human)
 
 - [ ] Copy accuracy (no unsupported claims, no employer references)
-- [ ] Demo URL `https://huggingface.co/spaces/egoh33/haze-watch` exists **only
-      after** the Space is deployed - deploy together or adjust the link
-- [ ] Layout: card uses `lg:col-span-2` so it lands as a full-width third card
+- [x] Demo URL `https://huggingface.co/spaces/egoh33/haze-watch` - deployed
+      2026-10-16, public
+- [ ] Layout: card keeps the replaced card's slot classes
+      (`glass-card ... lg:mt-16 min-h-[430px]`)
 
 ## Deploy procedure (after approval)
 
