@@ -1,4 +1,5 @@
 import { Mail, ArrowRight, Network, Database, Search, Sparkles, Flame, ShieldCheck } from 'lucide-react';
+import { useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CoachMarks, { useTour } from '../components/CoachMarks';
@@ -30,6 +31,7 @@ const GithubIcon = ({ size = 20 }: { size?: number }) => (
 
 export default function PortfolioHome() {
   const navigate = useNavigate();
+  const [projectSlide, setProjectSlide] = useState(0);
   const landingTour = useTour(LANDING_TOUR_KEY);
   const activateCardOnKeyDown = (event: KeyboardEvent<HTMLDivElement>, action: () => void) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -174,7 +176,13 @@ export default function PortfolioHome() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-6 max-w-5xl">
+          <div className="relative max-w-5xl">
+            <div className="overflow-hidden">
+              <div
+                className="flex transition-transform duration-500 ease-out"
+                style={{ transform: `translateX(-${projectSlide * 100}%)` }}
+              >
+                <div className="w-full shrink-0">
             <div
               data-tour="project-card"
               onClick={() => navigate('/rag-overview')}
@@ -259,7 +267,9 @@ export default function PortfolioHome() {
                 </span>
               </div>
             </div>
+              </div>
 
+              <div className="w-full shrink-0">
             <div
               data-tour="project-card"
               onClick={() => navigate('/haze-watch')}
@@ -344,6 +354,39 @@ export default function PortfolioHome() {
                 </span>
               </div>
             </div>
+              </div>
+            </div>
+          </div>
+          <div className="mt-6 flex items-center justify-center gap-4" role="group" aria-label="Project carousel">
+            <button
+              type="button"
+              aria-label="Previous project"
+              onClick={() => setProjectSlide((s) => (s + 1) % 2)}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-surface-elevated/40 text-secondary transition-colors hover:border-accent/50 hover:text-primary cursor-pointer"
+            >
+              ‹
+            </button>
+            <div className="flex items-center gap-2">
+              {[0, 1].map((i) => (
+                <button
+                  key={i}
+                  type="button"
+                  aria-label={`Show project ${i + 1}`}
+                  aria-current={projectSlide === i}
+                  onClick={() => setProjectSlide(i)}
+                  className={`h-2 rounded-full transition-all duration-200 cursor-pointer ${projectSlide === i ? 'w-6 bg-accent' : 'w-2 bg-border hover:bg-secondary'}`}
+                />
+              ))}
+            </div>
+            <button
+              type="button"
+              aria-label="Next project"
+              onClick={() => setProjectSlide((s) => (s + 1) % 2)}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-surface-elevated/40 text-secondary transition-colors hover:border-accent/50 hover:text-primary cursor-pointer"
+            >
+              ›
+            </button>
+          </div>
           </div>
         </section>
       </main>

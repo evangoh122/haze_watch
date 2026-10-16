@@ -11,20 +11,24 @@ folder holds the applied edit for the record.
 |---|---|
 | `PortfolioHome.tsx` | Complete edited page (drop-in replacement) |
 | `PortfolioHome.patch` | Unified diff against the live version |
+| `HazeWatch.tsx` | The `/haze-watch` case-study page incl. the embedded live app |
 | `make_card_edit.py` | Reproducible generator of the edit (rerun after upstream changes) |
 
 ## The edit
 
 Replaces the **Enterprise infrastructure / Market data architecture notes**
-(Blueprint) card in the "selected work" section with the **Haze Watch** card.
+(Blueprint) card in the "selected work" section with the **Haze Watch** card and
+converts the two project cards to a **carousel**: one card per view on a
+sliding track (`translateX` transform), with prev/next buttons and dot
+indicators (aria-labeled, keyboard operable, `aria-current` on the active dot).
 The card is sized and styled to the RAG Workbench card's system so both read as
-one design: `product-glass-preview` shell, `p-6 sm:p-8`, `min-h-[520px]`, same
-type scale and tile/tag/CTA classes, and the section grid is equalized
-(`lg:grid-cols-2`, was `1.12fr / 0.88fr`) so both cards render at the same
-width. Like the RAG card, it navigates internally: clicking the card (or
-Enter/Space) opens the **`/haze-watch` case-study page** on evangoh.com, which
-carries the "Open the app" button to the deployed app
-(`https://egoh33-haze-watch.hf.space`), hover glow + border highlight included.
+one design. Like the RAG card, it navigates internally: clicking the card (or
+Enter/Space) opens the **`/haze-watch` case-study page**.
+
+The `/haze-watch` page now **embeds the live app in an iframe** ("The app, right
+here.") with a faux browser bar and an "Open full screen" escape hatch, so the
+app sits inside evangoh.com instead of navigating away to the HF Space origin
+(verified embeddable: the Space sets no `X-Frame-Options`).
 
 The edit also carries three small fixes to the existing page: aria-labels on
 the LinkedIn/Contact header links (their visible labels hide below `sm`, unlike

@@ -1,14 +1,10 @@
 """Produce the Haze Watch card edit for evangoh.com (PortfolioHome.tsx).
 
 Replaces the "Enterprise infrastructure / Market data architecture notes"
-(Blueprint) card in the selected-work section with the Haze Watch card, sized
-and styled to match the RAG Workbench card exactly (same product-glass-preview
-shell, min-h-[520px], p-6 sm:p-8, same type scale), and equalizes the section
-grid columns so both cards render at the same size. The card is fully clickable
-(whole-card onClick opens the Space, Enter/Space via keyboard, hover glow +
-border highlight, cursor pointer).
+(Blueprint) card with the Haze Watch card and converts the two project cards to
+a CAROUSEL (one card per view, sliding track with prev/next buttons and dot
+indicators, keyboard accessible with aria labels). Output (NOT uploaded here):
 
-Output (NOT uploaded here):
   deploy/site-update/PortfolioHome.tsx   full edited file
   deploy/site-update/PortfolioHome.patch unified diff against the live version
 
@@ -33,12 +29,9 @@ from pathlib import Path
 
 OUT_DIR_DEFAULT = Path(__file__).resolve().parents[2] / "deploy" / "site-update"
 
-# Sizing/styling mirrors the RAG Workbench card (product-glass-preview shell,
-# min-h-[520px], p-6 sm:p-8, same header/box/tile/tag/CTA classes) so the two
-# cards read as one system. Like the RAG card it navigates internally: clicking
-# (or Enter/Space) opens the /haze-watch case-study page, with hover glow +
-# border highlight. The page carries the "Open the app" button to the deployed
-# app (https://egoh33-haze-watch.hf.space).
+# The Haze Watch card content (RAG-card sizing: product-glass-preview shell,
+# min-h-[520px], p-6 sm:p-8). Navigates internally to the /haze-watch
+# case-study page like the RAG card navigates to /rag-overview.
 CARD = """            <div
               data-tour="project-card"
               onClick={() => navigate('/haze-watch')}
@@ -124,19 +117,89 @@ CARD = """            <div
               </div>
             </div>"""
 
+CAROUSEL_OPEN = """          <div className="relative max-w-5xl">
+            <div className="overflow-hidden">
+              <div
+                className="flex transition-transform duration-500 ease-out"
+                style={{ transform: `translateX(-${projectSlide * 100}%)` }}
+              >
+                <div className="w-full shrink-0">"""
+
+SLIDE_BOUNDARY_OLD = """            </div>
+
+            <div
+              onClick={() => navigate('/rag', { state: { initialView: 'stocks' } })}"""
+
+SLIDE_BOUNDARY_NEW = """            </div>
+              </div>
+
+              <div className="w-full shrink-0">
+            <div
+              onClick={() => navigate('/rag', { state: { initialView: 'stocks' } })}"""
+
+CAROUSEL_TAIL = """            </div>
+              </div>
+            </div>
+          </div>
+          <div className="mt-6 flex items-center justify-center gap-4" role="group" aria-label="Project carousel">
+            <button
+              type="button"
+              aria-label="Previous project"
+              onClick={() => setProjectSlide((s) => (s + 1) % 2)}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-surface-elevated/40 text-secondary transition-colors hover:border-accent/50 hover:text-primary cursor-pointer"
+            >
+              ‹
+            </button>
+            <div className="flex items-center gap-2">
+              {[0, 1].map((i) => (
+                <button
+                  key={i}
+                  type="button"
+                  aria-label={`Show project ${i + 1}`}
+                  aria-current={projectSlide === i}
+                  onClick={() => setProjectSlide(i)}
+                  className={`h-2 rounded-full transition-all duration-200 cursor-pointer ${projectSlide === i ? 'w-6 bg-accent' : 'w-2 bg-border hover:bg-secondary'}`}
+                />
+              ))}
+            </div>
+            <button
+              type="button"
+              aria-label="Next project"
+              onClick={() => setProjectSlide((s) => (s + 1) % 2)}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-surface-elevated/40 text-secondary transition-colors hover:border-accent/50 hover:text-primary cursor-pointer"
+            >
+              ›
+            </button>
+          </div>
+          </div>
+        </section>"""
+
 
 def edit(source: Path, out_dir: Path) -> Path:
     original = source.read_text(encoding="utf-8")
     text = original
 
-    # 1) lucide imports: add Flame + ShieldCheck; drop Cpu (only the replaced
-    #    card used it - an unused import breaks the site's typecheck).
+    # 1) imports: useState for the carousel; lucide adds Flame + ShieldCheck and
+    #    drops Cpu (only the replaced card used it - unused breaks typecheck).
     old_import = "import { Mail, ArrowRight, Cpu, Network, Database, Search, Sparkles } from 'lucide-react';"
     new_import = "import { Mail, ArrowRight, Network, Database, Search, Sparkles, Flame, ShieldCheck } from 'lucide-react';"
-    assert old_import in text, "import line not found"
+    assert old_import in text, "lucide import line not found"
     text = text.replace(old_import, new_import)
 
-    # 2) accessible names below sm: the visible labels hide on small screens, so
+    old_react_import = "import type { KeyboardEvent } from 'react';"
+    assert old_react_import in text, "react import line not found"
+    text = text.replace(
+        old_react_import, "import { useState } from 'react';\n" + old_react_import
+    )
+
+    # 2) carousel state
+    old_nav = "  const navigate = useNavigate();"
+    assert old_nav in text, "navigate declaration not found"
+    text = text.replace(
+        old_nav, old_nav + "\n  const [projectSlide, setProjectSlide] = useState(0);"
+    )
+
+    # 3) accessible names below sm: the visible labels hide on small screens, so
     #    LinkedIn/Contact need aria-labels like the GitHub link already has.
     linkedin_anchor = (
         '              href="https://www.linkedin.com/in/eevangoh/"\n'
@@ -159,7 +222,7 @@ def edit(source: Path, out_dir: Path) -> Path:
         + "              title=\"Contact\"\n",
     )
 
-    # 3) footer disclaimer must not contradict the card's synthetic-data label.
+    # 4) footer disclaimer must not contradict the card's synthetic-data label.
     old_footer = "All data is publicly sourced and not related to my work."
     new_footer = (
         "Environmental data is publicly sourced; demo companies and financial "
@@ -168,14 +231,16 @@ def edit(source: Path, out_dir: Path) -> Path:
     assert old_footer in text, "footer disclaimer not found"
     text = text.replace(old_footer, new_footer)
 
-    # 4) equalize the two project-card columns (was 1.12fr / 0.88fr) so both
-    #    cards render at the same width.
-    old_grid = '<div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.12fr)_minmax(280px,0.88fr)] gap-5 lg:gap-6 max-w-5xl">'
-    new_grid = '<div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-6 max-w-5xl">'
+    # 5) grid -> carousel shell (outer > overflow-hidden > sliding track > slide 1)
+    old_grid = '          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.12fr)_minmax(280px,0.88fr)] gap-5 lg:gap-6 max-w-5xl">'
     assert old_grid in text, "projects grid not found"
-    text = text.replace(old_grid, new_grid)
+    text = text.replace(old_grid, CAROUSEL_OPEN)
 
-    # 5) replace the Enterprise infrastructure (Blueprint) card in place.
+    # 6) close slide 1 / open slide 2 between the two cards
+    assert SLIDE_BOUNDARY_OLD in text, "card boundary not found"
+    text = text.replace(SLIDE_BOUNDARY_OLD, SLIDE_BOUNDARY_NEW)
+
+    # 7) replace the Enterprise infrastructure (Blueprint) card with Haze Watch
     start_marker = "            <div\n              onClick={() => navigate('/rag', { state: { initialView: 'stocks' } })}"
     cta_marker = "                  Explore charts"
     start = text.find(start_marker)
@@ -185,6 +250,14 @@ def edit(source: Path, out_dir: Path) -> Path:
     end = text.find("\n            </div>\n", cta)
     assert end != -1, "Enterprise card end not found"
     text = text[:start] + CARD + "\n" + text[end + len("\n            </div>\n") :]
+
+    # 8) close the carousel after the second card and add the controls
+    tail_old = "            </div>\n          </div>\n        </section>"
+    cta = text.find("                  View case study")
+    assert cta != -1, "Haze card CTA not found"
+    tail_at = text.find(tail_old, cta)
+    assert tail_at != -1, "projects section tail not found"
+    text = text[:tail_at] + CAROUSEL_TAIL + text[tail_at + len(tail_old) :]
 
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "PortfolioHome.tsx").write_text(text, encoding="utf-8")
@@ -203,7 +276,7 @@ def edit(source: Path, out_dir: Path) -> Path:
     print(f"patch written: {out_dir / 'PortfolioHome.patch'} ({len(patch.splitlines())} lines)")
     print(f"Haze Watch cards: {text.count('Geospatial climate risk for lenders')}")
     print(f"Enterprise cards left: {text.count('Market data architecture notes')}")
-    print(f"min-h-[520px] cards: {text.count('min-h-[520px]')}")
+    print(f"carousel markers: slides={text.count('w-full shrink-0')}, dots={text.count('Show project')}")
     return out_dir / "PortfolioHome.tsx"
 
 
