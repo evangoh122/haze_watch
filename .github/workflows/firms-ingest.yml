@@ -66,6 +66,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: firms-history-geoparquet
-          path: data/history_geo/year=*.parquet
+          path: data/history_geo/
           if-no-files-found: error
           retention-days: 7

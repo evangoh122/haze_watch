@@ -249,8 +249,16 @@ def test_fetch_firms_area_empty_notice_returns_empty_frame():
     assert "hotspot_id" in df.columns  # canonical schema preserved
 
 
-def test_fetch_firms_area_bad_key_raises():
+def test_fetch_firms_area_bad_key_raises_without_leaking_the_key():
     client = _FakeClient("Invalid MAP_KEY. Please check your MAP_KEY.")
+    with pytest.raises(RuntimeError, match="FIRMS API error") as exc:
+        fetch_firms_area("94,-11.5,141.5,6.5", 3, api_key="SECRETKEY123", client=client)
+    assert "SECRETKEY123" not in str(exc.value)  # the MAP_KEY must never reach logs
+
+
+def test_fetch_firms_area_unknown_notice_raises():
+    """A transient service notice must fail loudly, not fake an empty window."""
+    client = _FakeClient("Service temporarily degraded, retry later.")
     with pytest.raises(RuntimeError, match="FIRMS API error"):
         fetch_firms_area("94,-11.5,141.5,6.5", 3, api_key="KEY", client=client)
 
@@ -267,3 +275,20 @@ def test_fetch_firms_range_stops_at_today():
     )
     assert client.urls == []  # nothing requested
     assert len(df) == 0
+
+
+def test_fetch_firms_range_clamps_window_span_to_today():
+    """DATE..DATE+span-1 must never reach past today, even mid-range."""
+    from datetime import date as date_cls
+    from datetime import timedelta
+
+    client = _FakeClient(FIRMS_CSV)
+    today = date_cls.today()
+    start = (today - timedelta(days=1)).isoformat()
+    fetch_firms_range(
+        "94,-11.5,141.5,6.5", start, 10, api_key="KEY", client=client, sleep=None
+    )
+    # yesterday..today is 2 days -> one clamped request, no future dates
+    assert client.urls == [
+        f"https://firms.modaps.eosdis.nasa.gov/api/area/csv/KEY/MODIS_NRT/94,-11.5,141.5,6.5/2/{start}"
+    ]

@@ -172,6 +172,10 @@ def read_firms_csvs(
     return merged.drop_duplicates(subset=["hotspot_id"]).reset_index(drop=True)
 
 
+# The exact plain-text notices the FIRMS area API returns for a window with no
+# detections. Anything else that is not CSV is an error, not an empty window.
+_EMPTY_WINDOW_NOTICES = {"no hotspots available", "no data available"}
+
 # FIRMS area API window limit per request (the API form documents 1-5 days;
 # larger DAY_RANGE values consume multiple transactions and are rejected by the
 # form). Longer spans are chunked by fetch_firms_range.
@@ -228,26 +232,31 @@ def fetch_firms_area(
     body = (response.text or "").strip()
     first_line = body.splitlines()[0].lower() if body else ""
     if "latitude" not in first_line:
-        lowered = body.lower()
-        if any(token in lowered for token in ("invalid", "error", "unauthorized", "forbidden", "key")):
-            raise RuntimeError(f"FIRMS API error for {url.rsplit('/', 4)[-4:]}: {body[:200]}")
-        # Empty windows come back as a plain-text notice - not an error.
-        return normalize_firms(
-            pd.DataFrame(
-                columns=[
-                    "latitude",
-                    "longitude",
-                    "acq_date",
-                    "acq_time",
-                    "satellite",
-                    "confidence",
-                    "frp",
-                    "daynight",
-                    "bright_ti4",
-                ]
-            ),
-            source=f"NASA_FIRMS_{sensor}",
-            available_lag_hours=settings.firms_availability_lag_hours,
+        # Only the known empty-window notices mean "no detections". Anything
+        # else (service notices, auth failures) must fail loudly - a 25-year
+        # backfill may never silently omit a window. Never interpolate the
+        # request URL here: it contains the MAP_KEY and the CLI prints
+        # RuntimeError messages to stderr (CI logs).
+        if body.lower().rstrip(".") in _EMPTY_WINDOW_NOTICES:
+            return normalize_firms(
+                pd.DataFrame(
+                    columns=[
+                        "latitude",
+                        "longitude",
+                        "acq_date",
+                        "acq_time",
+                        "satellite",
+                        "confidence",
+                        "frp",
+                        "daynight",
+                        "bright_ti4",
+                    ]
+                ),
+                source=f"NASA_FIRMS_{sensor}",
+                available_lag_hours=settings.firms_availability_lag_hours,
+            )
+        raise RuntimeError(
+            f"FIRMS API error ({sensor}, {days}-day window from {date or 'today'}): {body[:200]}"
         )
 
     return normalize_firms(
@@ -292,12 +301,14 @@ def fetch_firms_range(
 
     today = date_cls.today()
     while offset < backfill_days:
-        span = min(window_days, backfill_days - offset)
         window_date = start + timedelta(days=offset)
         if window_date > today:
             if progress is not None:
                 progress(f"firms range stops at today ({today}); skipping future windows")
             break
+        # The window must not extend past today: the API is asked for
+        # DATE..DATE+span-1, so clamp the span to the remaining days.
+        span = min(window_days, backfill_days - offset, (today - window_date).days + 1)
         window_start = window_date.isoformat()
         if progress is not None:
             progress(f"firms window {window_start} +{span}d ({sensor})")

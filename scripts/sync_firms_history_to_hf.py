@@ -94,10 +94,11 @@ def sync_history(
     results: dict[int, tuple[int, int]] = {}
     for year_value, chunk in df.groupby(df["observation_time"].dt.year):
         year = int(year_value)
-        # Read the remote year even on dry runs so this path is always exercised.
+        # Local files mirror the per-sensor remote layout so concurrent sensor
+        # runs never overwrite each other's year files before upload.
         existing = load_remote_year(dataset, sensor, year)
         merged = merge_hotspots(existing, chunk)
-        out = out_dir / f"year={year}.parquet"
+        out = out_dir / f"sensor={sensor}" / f"year={year}.parquet"
         points_to_geoparquet(merged, out)
         results[year] = (len(chunk), len(merged))
         if not dry_run:
