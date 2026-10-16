@@ -9,26 +9,55 @@ statements, bank exposures and insurance policies.
 > system. All commercial and financial data is synthetic and must stay labeled as such.
 > See `docs/governance.md` for the full disclaimer and data-handling rules.
 
+## Live
+
+- **App** — `https://www.evangoh.com/haze-watch` (the demo container behind a Cloudflare
+  Worker; use `www`, the bare apex has no working origin route — see
+  `deploy/cloudflare/README.md`)
+- **Case studies** — `/projects/haze-watch` and `/projects/rag-workbench` on the same host
+- **Hugging Face Space** — `egoh33/haze-watch` (public; without an LLM key the chat layer
+  falls back to the deterministic, data-grounded answers)
+- **FIRMS history store** (private dataset) — `egoh33/haze-watch-historical`
+
 ## Current status
 
 | Area | Status |
 |---|---|
 | Repository structure and scaffolding | Done |
-| Geospatial ingestion pipeline (`pipelines/`) | **Done — 36 tests passing** |
+| Geospatial ingestion pipeline (`pipelines/`) | **Done — 75 tests passing** |
+| FIRMS 25-year detection archive (2000-2026) | **Done — 9.6M detections in per-sensor/year GeoParquet** |
 | Provenance registry + data-quality gates | **Done** |
 | Concession download w/ license gate + anonymized export | **Done** |
 | Point-in-time feature building (leakage-safe) | **Done** |
 | Baseline hazard score (deterministic, labeled) | **Done — not a model** |
-| Environment (Docker Compose, CI) | Wired; runs test suites |
+| Environment (Docker Compose, CI) | Wired; 4 GitHub Actions workflows (python, frontend, security, firms-ingest) |
 | LLM chat layer (`backend/app/llm/`) | **Done — grounded chat API + UI panel** |
 | DeepSeek / OpenAI-compatible provider | Wired; live calls need `LLM_API_KEY` (`scripts/deepseek_review.py` for reviews) |
-| SCQA website + banking demo | **Done — landing narrative + working stress-test demo (21 frontend tests)** |
+| SCQA website + banking demo | **Done — landing narrative + working stress-test demo (26 frontend tests)** |
 | Synthetic financial data engine | Stubs + skipped tests only |
 | ML models (segmentation, forecasting) | Not implemented |
 | Credit / insurance analytics | Stress engine done; insurance analytics planned |
 
-Nothing in this repository currently produces environmental observations, model
-evaluation results, or finished analytics. Status will be updated as phases land.
+The repository **does** now produce environmental observations: `pipelines/` builds a
+versioned FIRMS archive (MODIS 2000+, VIIRS 2012+, per sensor and year, 60 files,
+9.6M detections) which is what the `/haze-watch` case study's historical work reads.
+What is still absent is model evaluation results and finished credit/insurance
+analytics — ML phases are unimplemented and the financial side stays synthetic.
+Status will be updated as phases land.
+
+### FIRMS history coverage
+
+| Sensor lane | Span | Files | Detections |
+|---|---|---|---|
+| `MODIS_SP` | 2000-2026 | 27 | 1,797,353 |
+| `VIIRS_SNPP_SP` | 2012-2026 | 15 | 4,099,201 |
+| `VIIRS_NOAA20_SP` | 2018-2026 | 9 | 1,599,459 |
+| `VIIRS_NOAA21_SP` | 2023-2026 | 4 | 584,461 |
+| `*_NRT` (recency, refreshed daily) | 2024-2026 | 5 | 1,542,120 |
+
+No missing years. The `*_SP` (Standard Processing) lanes carry the archive; the `*_NRT`
+lanes only serve their retention window and are kept fresh by the daily job — which is
+why backfills must use the `*_SP` sources.
 
 ## Repository structure
 
@@ -45,13 +74,13 @@ haze_watch/
 │   │   └── services/   Hazard scoring, exposure, scenario engines
 │   └── tests/          pytest unit and integration tests
 ├── frontend/           React + TypeScript + Tailwind + MapLibre GL JS
-│   └── src/pages/      8 core dashboard pages
+│   └── src/pages/      10 core dashboard pages
 ├── ml/                 Geospatial ML: features, models, training, evaluation
 ├── pipelines/          Batch ingestion and scheduled inference jobs
 ├── synthetic/          Synthetic financial / corporate / insurance data engine
 ├── data/               raw | interim | processed | synthetic (+ provenance metadata)
 ├── docs/               Architecture, data model, API contract, evaluation, licensing
-└── .github/workflows/  CI (backend tests, frontend build)
+└── .github/workflows/  CI: python, frontend, security (gitleaks), firms-ingest
 ```
 
 ## Quickstart (local)
@@ -85,7 +114,9 @@ Phases follow `project_profile.md` section 12:
 - `docs/api-contract.md` — API contract
 - `docs/data-sources-and-licensing.md` — dataset provenance and licensing register
 - `docs/model-evaluation.md` — evaluation methodology
-- `docs/deployment.md` — deployment guide
+- `docs/pipeline.md` — pipeline usage and the FIRMS history backfill
+- `docs/deployment.md` — deployment guide (dev compose, demo container, public routing)
+- `docs/hf-access.md` — Hugging Face datasets/Spaces and reviewer access
 - `docs/governance.md` — research disclaimer and governance rules
 - `docs/llm.md` — LLM chat layer (DeepSeek / OpenAI-compatible providers)
 
