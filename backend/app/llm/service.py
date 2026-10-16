@@ -16,14 +16,27 @@ from .guardrails import DISCLAIMER, build_messages, validate_response
 from .provider import ChatClient, make_client
 
 # Keyword hints per dataset family, used to cite only the sources an answer used.
+# Keys are the registry's dataset_id prefixes (before "::"): an id like
+# "fire_hotspots::nasa_firms" looks up "fire_hotspots".
 _SOURCE_HINTS: dict[str, tuple[str, ...]] = {
-    "fire": ("hotspot", "fire", "detection", "firms"),
-    "weather": ("weather", "rain", "rainfall", "temperature", "wind", "humidity", "drought"),
-    "plantation": ("concession", "polygon", "plantation", "boundary"),
+    "fire_hotspots": ("hotspot", "fire", "detection", "firms"),
+    "weather_observations": ("weather", "rain", "rainfall", "temperature", "wind", "humidity", "drought"),
+    "plantation_polygons": ("concession", "polygon", "plantation", "boundary"),
     "exposure": ("exposure", "buffer", "near", "affected"),
-    "forecast": ("forecast", "hazard", "prediction", "probability", "score"),
+    "forecast_baseline": ("forecast", "hazard", "prediction", "probability", "score"),
     "environmental_features": ("feature", "window", "count"),
 }
+
+
+def _hints_for(dataset_id: str) -> tuple[str, ...]:
+    """Resolve hints for a registry id; tolerate variants via substring match."""
+    key = str(dataset_id).split("::")[0]
+    if key in _SOURCE_HINTS:
+        return _SOURCE_HINTS[key]
+    for family, hints in _SOURCE_HINTS.items():
+        if family in str(dataset_id):
+            return hints
+    return ()
 
 
 def select_sources(
@@ -35,16 +48,18 @@ def select_sources(
     questions cite matching datasets only. Falls back to an empty list (no
     citation) rather than citing the whole registry for an answer that used none.
     """
-    question = " ".join(m.get("content", "") for m in messages if m.get("role") == "user").lower()
+    # Only the turn being answered: a keyword in an older turn must not keep
+    # citing the full registry for later, unrelated questions.
+    question = next(
+        (m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), ""
+    ).lower()
     if not question:
         return []
     if any(k in question for k in ("dataset", "source", "provenance", "licen", "registered", "loaded")):
         return context.sources
     matched_ids: set[str] = set()
     for dataset_id in (entry.get("dataset_id") or "" for entry in context.registry):
-        key = str(dataset_id).split("::")[0]
-        hints = _SOURCE_HINTS.get(key, ())
-        if any(hint in question for hint in hints):
+        if any(hint in question for hint in _hints_for(dataset_id)):
             matched_ids.add(str(dataset_id))
     return [s for s in context.sources if s.get("dataset_id") in matched_ids]
 
@@ -73,7 +88,8 @@ def chat(
                 "of default, hotspot detections are not confirmed burned area or "
                 "causation, and all commercial data is synthetic."
             ),
-            "sources": select_sources(messages, context),
+            # A refused reply cites nothing - it used no source content.
+            "sources": [],
             "model": result.model,
             "provider": result.provider,
             "fallback": result.fallback,

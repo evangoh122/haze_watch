@@ -102,20 +102,8 @@ def answer_from_context(question: str, context: GroundedContext) -> str:
             )
         return "\n".join(lines)
 
-    if any(k in q for k in ("hotspot", "detection", "fire", "exposure", "polygon", "concession", "how many")):
-        if not summary:
-            return f"{label} No exposure summary is loaded, so I cannot report fire exposure figures."
-        lines = [
-            f"{label} Exposure summary (as_of={summary.get('as_of')}):",
-            f"- {summary.get('polygons')} polygons, {summary.get('hotspots_considered')} hotspot detections considered",
-            f"- {summary.get('polygons_with_detections')} polygons have detections within {summary.get('buffer_km')} km",
-            f"- polygon treatment={summary.get('polygon_treatment')}, hotspot treatment={summary.get('hotspot_treatment')}",
-            f"- caveat: {summary.get('caveat', 'n/a')}",
-        ]
-        if summary.get("warning"):
-            lines.append(f"- WARNING: {summary['warning']}")
-        return "\n".join(lines)
-
+    # Forecast questions take precedence over the broader fire/exposure branch
+    # ("what is the fire forecast?" must reach the forecast answer).
     if any(k in q for k in ("forecast", "hazard", "risk score", "predict", "probability")):
         has_forecast = any(
             "forecast" in str(entry.get("dataset_id", "")).lower() for entry in context.registry
@@ -133,6 +121,22 @@ def answer_from_context(question: str, context: GroundedContext) -> str:
             "not a probability of default. ML models arrive in Phase 2 - no "
             "predictive accuracy is claimed today."
         )
+
+    if any(k in q for k in ("hotspot", "detection", "fire", "exposure", "polygon", "concession", "how many")) and not any(
+        k in q for k in ("forecast", "hazard", "predict", "probability")
+    ):
+        if not summary:
+            return f"{label} No exposure summary is loaded, so I cannot report fire exposure figures."
+        lines = [
+            f"{label} Exposure summary (as_of={summary.get('as_of')}):",
+            f"- {summary.get('polygons')} polygons, {summary.get('hotspots_considered')} hotspot detections considered",
+            f"- {summary.get('polygons_with_detections')} polygons have detections within {summary.get('buffer_km')} km",
+            f"- polygon treatment={summary.get('polygon_treatment')}, hotspot treatment={summary.get('hotspot_treatment')}",
+            f"- caveat: {summary.get('caveat', 'n/a')}",
+        ]
+        if summary.get("warning"):
+            lines.append(f"- WARNING: {summary['warning']}")
+        return "\n".join(lines)
 
     if any(k in q for k in ("company", "financial", "borrower", "credit", "insurance", "ebitda", "loan")):
         return (

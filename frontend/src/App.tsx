@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
+import { API_BASE_URL } from "./lib/api";
 import BankingDemo from "./pages/BankingDemo";
 import ChatPage from "./pages/ChatPage";
 import FireForecast from "./pages/FireForecast";
@@ -73,7 +74,7 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/v1/health")
+    fetch(`${API_BASE_URL}/health`)
       .then((response) => {
         if (!cancelled) setHealth(response.ok ? "online" : "offline");
       })

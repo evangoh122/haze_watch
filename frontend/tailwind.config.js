@@ -8,18 +8,21 @@ export default {
       colors: {
         background: "#090A0C",
         surface: "#111317",
-        surfaceElevated: "#181B20",
+        // Kebab-case keys so the classes used across the app resolve
+        // (bg-surface-elevated, border-border-subtle, text-accent-bright, ...).
+        "surface-elevated": "#181B20",
         primary: "#F3F1EA",
         secondary: "#B8BDC5",
         muted: "#818791",
         border: "#32363D",
-        borderSubtle: "#22262C",
+        "border-subtle": "#22262C",
         accent: "#D6B65A",
-        accentBright: "#F1D77A",
-        accentFill: "#C9A227",
-        accentInk: "#171205",
+        "accent-bright": "#F1D77A",
+        "accent-fill": "#C9A227",
+        "accent-ink": "#171205",
+        "accent-dim": "rgba(214, 182, 90, 0.14)",
         silver: "#C7CBD1",
-        silverDim: "#8D949E",
+        "silver-dim": "#8D949E",
         bullish: "#43D19E",
         bearish: "#FF727F",
         // Semantic aliases used across pages (mapped onto the palette above).
