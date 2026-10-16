@@ -25,25 +25,40 @@ have to target Swiper's own `.swiper-slide` markup.
 
 ## The edit
 
-Replaces the **Enterprise infrastructure / Market data architecture notes**
-(Blueprint) card in the "selected work" section with the **Haze Watch** card and
-converts the two project cards to a **Swiper carousel** (`swiper/react` 14,
-`A11y` + `Keyboard` + `Navigation` modules) in **center mode**:
-`slidesPerView={1.15}` + `spaceBetween={28}` + `centeredSlides`, so the active
-card sits centred at ~87% of the container with a ~41px peek of the neighbour,
-and `rewind` makes prev/next wrap at the ends. Arrows are driven by the
-Navigation module; the dots stay React-rendered from `onSlideChange` so the
-bespoke Tailwind styling and `aria-current` are unchanged. Only `swiper/css` and
+Converts the "selected work" section to a **three-card Swiper carousel**
+(`swiper/react` 14, `A11y` + `Keyboard` + `Navigation` modules) in **center
+mode**: `slidesPerView={1.15}` + `spaceBetween={28}` + `centeredSlides`, so the
+active card sits centred at ~87% of the container with a ~41px peek of the
+neighbour, and `rewind` makes prev/next wrap at the ends. Arrows are driven by
+the Navigation module; the dots stay React-rendered from `onSlideChange` so the
+bespoke Tailwind styling and `aria-current` are unchanged, and their count comes
+from `instance.slides.length` rather than a literal list. Only `swiper/css` and
 `swiper/css/a11y` are imported, so no default Swiper chrome leaks into the
 design. ArrowLeft/ArrowRight and touch dragging come with it. Cards stay flat -
 the evidence-heavy content is not something a coverflow tilt should distort
 (`effect="coverflow"` + the EffectCoverflow module is the alternative).
 
-The inactive card is now **`inert`, `aria-hidden` and `tabIndex={-1}`**, applied
+The three cards:
+
+| Card | How it got there | Goes to |
+|---|---|---|
+| RAG Workbench | kept, re-pointed at `/projects/rag-workbench` | internal route |
+| Haze Watch | replaces the **Enterprise infrastructure / Market data architecture notes** (Blueprint) card | `/projects/haze-watch` |
+| Quant Platform | added (third slide) | `github.com/evangoh122/quant_platform_1` (external) |
+
+The Quant Platform copy is taken only from that repository's own README and
+status tables, which carry verification dates - 287M rows ingested (239M bronze),
+5 data domains (market, options, SEC, COT, macro), 8+ Lakebase tables - and it
+repeats the repo's own caveat that the signals are an untuned baseline with no
+predictive edge claimed. Its card is an `<a>` rather than a div with `onClick`,
+because the target is external: `target="_blank"` + `rel="noopener noreferrer"`
+keeps middle-click/copy-link and native keyboard activation.
+
+The inactive card is **`inert`, `aria-hidden` and `tabIndex={-1}`**, applied
 through `SwiperSlide`'s render function (`isActive`). Previously the clipped card
 stayed focusable, so a keyboard user could tab to - and activate - a card that
-was not visible (CodeRabbit finding on this PR). The card is sized and styled to
-the RAG Workbench card's system so both read as one design.
+was not visible (CodeRabbit finding on this PR). Every card is sized and styled
+to the RAG Workbench card's system so the three read as one design.
 
 ## Routing
 
@@ -54,6 +69,7 @@ clean URL:
 |---|---|---|
 | RAG Workbench | `/projects/rag-workbench` | keeps `/rag` |
 | Haze Watch | `/projects/haze-watch` | `www.evangoh.com/haze-watch` |
+| Quant Platform | `github.com/evangoh122/quant_platform_1` | external repository (the app itself needs a Databricks workspace login) |
 
 `/rag-overview` and `/haze-watch` remain as aliases. The app's CTA
 (`APP_URL` in `HazeWatch.tsx`) is `https://www.evangoh.com/haze-watch` - `www`
@@ -130,13 +146,16 @@ Why:
 - [ ] Copy accuracy (no unsupported claims, no employer references)
 - [x] Demo URL `https://huggingface.co/spaces/egoh33/haze-watch` - deployed
       2026-10-16, public
-- [ ] Layout: both project cards share one size system
-      (`product-glass-preview ... min-h-[520px]`, equal `lg:grid-cols-2`
-      columns); card is clickable with hover highlight
-- [ ] Carousel: center mode, the selected card full size and the neighbour scaled
-      down (634x887 active vs 590x825 side, equal 634px base height); arrows, dots
-      and arrow-keys work; the inactive slide is inert and untabbable. Verified in
-      headless Chromium against the deployed bundle: 19/19 checks.
+- [ ] Layout: all three project cards share one size system
+      (`product-glass-preview ... min-h-[520px]`); card is clickable with hover
+      highlight
+- [ ] Carousel: center mode, the selected card full size and the neighbours
+      scaled down (887x651 active vs 825x605 sides, equal 651px base height); the
+      dots are derived from `instance.slides.length` (three of them); arrows,
+      dots and arrow-keys work; the inactive slides are inert and untabbable; the
+      Quant Platform card is a real anchor to its repo (`target="_blank"` +
+      `rel="noopener noreferrer"`). Verified in headless Chromium against the
+      deployed bundle: 13/13 checks.
 
 ## Deploy procedure (after approval)
 
