@@ -40,7 +40,7 @@ def load_remote_year(dataset: str, year: int) -> pd.DataFrame | None:
 
     try:
         local = hf_hub_download(
-            repo_id=dataset, repo_type="dataset", path_in_repo=history_path(year)
+            repo_id=dataset, repo_type="dataset", filename=history_path(year)
         )
     except EntryNotFoundError:
         return None
@@ -91,7 +91,8 @@ def sync_history(
     results: dict[int, tuple[int, int]] = {}
     for year_value, chunk in df.groupby(df["observation_time"].dt.year):
         year = int(year_value)
-        existing = None if dry_run else load_remote_year(dataset, year)
+        # Read the remote year even on dry runs so this path is always exercised.
+        existing = load_remote_year(dataset, year)
         merged = merge_hotspots(existing, chunk)
         out = out_dir / f"year={year}.parquet"
         points_to_geoparquet(merged, out)
