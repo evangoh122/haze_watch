@@ -1,9 +1,14 @@
 """Produce the Haze Watch card edit for evangoh.com (PortfolioHome.tsx).
 
 Replaces the "Enterprise infrastructure / Market data architecture notes"
-(Blueprint) card in the selected-work section with the Haze Watch card, in the
-same slot, size and structure. Output (NOT uploaded here):
+(Blueprint) card in the selected-work section with the Haze Watch card, sized
+and styled to match the RAG Workbench card exactly (same product-glass-preview
+shell, min-h-[520px], p-6 sm:p-8, same type scale), and equalizes the section
+grid columns so both cards render at the same size. The card is fully clickable
+(whole-card onClick opens the Space, Enter/Space via keyboard, hover glow +
+border highlight, cursor pointer).
 
+Output (NOT uploaded here):
   deploy/site-update/PortfolioHome.tsx   full edited file
   deploy/site-update/PortfolioHome.patch unified diff against the live version
 
@@ -28,25 +33,28 @@ from pathlib import Path
 
 OUT_DIR_DEFAULT = Path(__file__).resolve().parents[2] / "deploy" / "site-update"
 
-# Same slot/structure as the card being replaced (glass-card, offset, min-h),
-# with the Haze Watch copy and a live-demo CTA to the deployed Space.
+# Sizing/styling mirrors the RAG Workbench card (product-glass-preview shell,
+# min-h-[520px], p-6 sm:p-8, same header/box/tile/tag/CTA classes) so the two
+# cards read as one system. Clickable + hover highlight (glow + border) like
+# the RAG card, with Enter/Space keyboard activation.
 CARD = """            <div
               data-tour="project-card"
               onClick={() => window.open('https://huggingface.co/spaces/egoh33/haze-watch', '_blank', 'noopener,noreferrer')}
               onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); window.open('https://huggingface.co/spaces/egoh33/haze-watch', '_blank', 'noopener,noreferrer'); } }}
               role="button"
               tabIndex={0}
-              className="glass-card hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 relative group overflow-hidden cursor-pointer lg:mt-16 min-h-[430px]"
+              className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
             >
+              <div className="absolute top-0 right-0 w-40 h-40 bg-accent/10 rounded-full blur-3xl group-hover:bg-accent/15 transition-colors pointer-events-none" />
               <div>
-                <div className="flex items-start justify-between mb-5 flex-wrap gap-2">
+                <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
                   <div className="flex items-center gap-2.5">
                     <div className="p-2 bg-accent/8 border border-accent/15 rounded-xl text-accent">
                       <Flame size={20} />
                     </div>
                     <div>
-                      <h3 className="text-base sm:text-lg font-semibold text-primary tracking-tight">Haze Watch</h3>
-                      <p className="text-[11px] font-mono text-secondary">Geospatial climate risk for lenders</p>
+                      <h3 className="text-xl sm:text-2xl font-semibold text-primary tracking-tight">Haze Watch</h3>
+                      <p className="text-[11px] font-mono text-accent-bright">Geospatial climate risk for lenders</p>
                     </div>
                   </div>
                   <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md border border-accent/20 bg-accent/8 text-accent-bright">
@@ -54,40 +62,32 @@ CARD = """            <div
                   </span>
                 </div>
 
-                <div className="mb-5 bg-surface-elevated/20 border border-border/20 rounded-xl p-4">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-secondary mb-2 font-mono">
+                <div className="mb-6 bg-background/42 border border-white/[0.06] rounded-xl p-4">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-accent-bright mb-3 font-mono">
                     why it exists
                   </div>
-                  <p className="text-xs text-secondary/80 leading-relaxed mb-3 font-light">
+                  <p className="text-sm text-secondary leading-7 mb-4 font-light">
                     Banks and insurers hold plantation portfolios exposed to recurring wildfire and haze, yet the link from environmental hazard to borrower cash flow is rarely modeled end to end. Haze Watch joins real NASA fire observations to concession geography and runs auditable credit stress scenarios.
                   </p>
-                  <div className="grid grid-cols-3 gap-2 text-center mb-3">
-                    <div className="bg-background/40 border border-border/25 rounded-lg py-1.5">
-                      <div className="text-xs font-mono font-semibold text-secondary">300</div>
-                      <div className="text-[9px] text-secondary/60">real polygons</div>
+                  <div className="grid grid-cols-3 gap-2 text-left">
+                    <div className="bg-white/[0.035] border border-white/[0.06] rounded-lg p-3">
+                      <div className="text-sm font-mono font-semibold text-accent-bright">300</div>
+                      <div className="text-[10px] text-secondary/70">real concession polygons</div>
                     </div>
-                    <div className="bg-background/40 border border-border/25 rounded-lg py-1.5">
-                      <div className="text-xs font-mono font-semibold text-secondary">24-72h</div>
-                      <div className="text-[9px] text-secondary/60">horizons</div>
+                    <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg p-3">
+                      <div className="text-sm font-mono font-semibold text-accent-bright">24-72h</div>
+                      <div className="text-[10px] text-secondary/70">hazard horizons</div>
                     </div>
-                    <div className="bg-background/40 border border-border/25 rounded-lg py-1.5">
-                      <div className="text-xs font-mono font-semibold text-secondary">46</div>
-                      <div className="text-[9px] text-secondary/60">pipeline tests</div>
+                    <div className="bg-white/[0.035] border border-white/[0.06] rounded-lg p-3">
+                      <div className="text-sm font-mono font-semibold text-accent-bright">46</div>
+                      <div className="text-[10px] text-secondary/70">pipeline tests</div>
                     </div>
                   </div>
-                  <p className="text-xs text-secondary/70 leading-relaxed font-light m-0">
-                    Real environmental data, entirely synthetic commercial data. Every credit ratio traces to a documented formula, and hazard scores are labeled baselines - never probabilities of default.
-                  </p>
                 </div>
 
-                <div className="mb-5 bg-surface-elevated/20 border border-border/20 rounded-xl p-4">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-secondary mb-2 font-mono">
-                    pipeline
-                  </div>
-                  <div className="font-mono text-[9px] text-secondary/60 leading-relaxed">
-                    NASA FIRMS + ERA5 -&gt; concession GIS -&gt; DuckDB -&gt; auditable stress API
-                  </div>
-                </div>
+                <p className="text-sm text-secondary leading-7 mb-6 font-light max-w-xl">
+                  Real environmental data, entirely synthetic commercial data. Every credit ratio traces to a documented formula, every dataset carries its provenance and licence, and hazard scores are labeled baselines - never probabilities of default.
+                </p>
 
                 <div className="grid grid-cols-2 gap-4 mb-6">
                   <div className="glass-sm p-3.5">
@@ -108,12 +108,12 @@ CARD = """            <div
               </div>
 
               <div className="flex items-center justify-between border-t border-border/30 pt-5 mt-2 flex-wrap gap-3">
-                <div className="flex flex-wrap gap-1">
-                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">Geospatial</span>
-                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">FastAPI</span>
-                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">React</span>
-                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">MapLibre</span>
-                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary/50 rounded">DuckDB</span>
+                <div className="flex flex-wrap gap-1.5 max-w-md">
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">Geospatial</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">FastAPI</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">React</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">MapLibre</span>
+                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">DuckDB</span>
                 </div>
                 <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent group-hover:text-accent-bright transition-colors group-hover:underline">
                   Open live demo
@@ -166,7 +166,14 @@ def edit(source: Path, out_dir: Path) -> Path:
     assert old_footer in text, "footer disclaimer not found"
     text = text.replace(old_footer, new_footer)
 
-    # 4) replace the Enterprise infrastructure (Blueprint) card in place.
+    # 4) equalize the two project-card columns (was 1.12fr / 0.88fr) so both
+    #    cards render at the same width.
+    old_grid = '<div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.12fr)_minmax(280px,0.88fr)] gap-5 lg:gap-6 max-w-5xl">'
+    new_grid = '<div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-6 max-w-5xl">'
+    assert old_grid in text, "projects grid not found"
+    text = text.replace(old_grid, new_grid)
+
+    # 5) replace the Enterprise infrastructure (Blueprint) card in place.
     start_marker = "            <div\n              onClick={() => navigate('/rag', { state: { initialView: 'stocks' } })}"
     cta_marker = "                  Explore charts"
     start = text.find(start_marker)
@@ -194,6 +201,7 @@ def edit(source: Path, out_dir: Path) -> Path:
     print(f"patch written: {out_dir / 'PortfolioHome.patch'} ({len(patch.splitlines())} lines)")
     print(f"Haze Watch cards: {text.count('Geospatial climate risk for lenders')}")
     print(f"Enterprise cards left: {text.count('Market data architecture notes')}")
+    print(f"min-h-[520px] cards: {text.count('min-h-[520px]')}")
     return out_dir / "PortfolioHome.tsx"
 
 

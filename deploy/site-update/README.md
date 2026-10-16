@@ -16,10 +16,14 @@ folder holds the applied edit for the record.
 ## The edit
 
 Replaces the **Enterprise infrastructure / Market data architecture notes**
-(Blueprint) card in the "selected work" section with the **Haze Watch** card -
-same slot, size and structure (icon header, why-it-exists box, stat tiles,
-pipeline note, feature tiles, tag pills). It opens the Haze Watch HF Space
-(`https://huggingface.co/spaces/egoh33/haze-watch`) in a new tab.
+(Blueprint) card in the "selected work" section with the **Haze Watch** card.
+The card is sized and styled to the RAG Workbench card's system so both read as
+one design: `product-glass-preview` shell, `p-6 sm:p-8`, `min-h-[520px]`, same
+type scale and tile/tag/CTA classes, and the section grid is equalized
+(`lg:grid-cols-2`, was `1.12fr / 0.88fr`) so both cards render at the same
+width. The card is fully clickable (whole-card click opens the Space,
+Enter/Space keyboard activation, hover glow + border highlight, pointer
+cursor), matching the RAG card's affordances.
 
 The edit also carries three small fixes to the existing page: aria-labels on
 the LinkedIn/Contact header links (their visible labels hide below `sm`, unlike
@@ -36,8 +40,9 @@ Card claims are project-verified facts only: 300 real concession polygons
 - [ ] Copy accuracy (no unsupported claims, no employer references)
 - [x] Demo URL `https://huggingface.co/spaces/egoh33/haze-watch` - deployed
       2026-10-16, public
-- [ ] Layout: card keeps the replaced card's slot classes
-      (`glass-card ... lg:mt-16 min-h-[430px]`)
+- [ ] Layout: both project cards share one size system
+      (`product-glass-preview ... min-h-[520px]`, equal `lg:grid-cols-2`
+      columns); card is clickable with hover highlight
 
 ## Deploy procedure (after approval)
 
