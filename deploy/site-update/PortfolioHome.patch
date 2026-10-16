@@ -33,7 +33,7 @@
                className="text-secondary hover:text-primary transition-colors flex items-center gap-1.5"
              >
                <Mail size={15} />
-@@ -170,7 +176,13 @@
+@@ -170,11 +176,17 @@
              </div>
            </div>
  
@@ -47,7 +47,13 @@
 +                <div className="w-full shrink-0">
              <div
                data-tour="project-card"
-               onClick={() => navigate('/rag-overview')}
+-              onClick={() => navigate('/rag-overview')}
+-              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/rag-overview'))}
++              onClick={() => navigate('/projects/rag-workbench')}
++              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/projects/rag-workbench'))}
+               role="button"
+               tabIndex={0}
+               className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
 @@ -255,99 +267,126 @@
                  </span>
                </div>
@@ -60,8 +66,8 @@
 -              onClick={() => navigate('/rag', { state: { initialView: 'stocks' } })}
 -              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/rag', { state: { initialView: 'stocks' } }))}
 +              data-tour="project-card"
-+              onClick={() => navigate('/haze-watch')}
-+              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/haze-watch'))}
++              onClick={() => navigate('/projects/haze-watch')}
++              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/projects/haze-watch'))}
                role="button"
                tabIndex={0}
 -              className="glass-card hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 relative group overflow-hidden cursor-pointer lg:mt-16 min-h-[430px]"

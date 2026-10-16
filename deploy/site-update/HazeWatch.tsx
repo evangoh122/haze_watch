@@ -14,9 +14,9 @@ import {
 } from 'lucide-react';
 import { DisclaimerFooter } from '../components/Disclaimer';
 
-// Interim target: the Hugging Face brand page (no direct .hf.space host, no
-// iframe). Swap to the self-hosted origin once the consolidated container ships.
-const APP_URL = 'https://huggingface.co/spaces/egoh33/haze-watch';
+// The app lives on the portfolio domain at /haze-watch (Cloudflare Worker ->
+// app container, per deploy/cloudflare). No .hf.space host appears anywhere.
+const APP_URL = 'https://evangoh.com/haze-watch';
 
 export default function HazeWatch() {
   const navigate = useNavigate();

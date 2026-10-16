@@ -34,8 +34,8 @@ OUT_DIR_DEFAULT = Path(__file__).resolve().parents[2] / "deploy" / "site-update"
 # case-study page like the RAG card navigates to /rag-overview.
 CARD = """            <div
               data-tour="project-card"
-              onClick={() => navigate('/haze-watch')}
-              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/haze-watch'))}
+              onClick={() => navigate('/projects/haze-watch')}
+              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/projects/haze-watch'))}
               role="button"
               tabIndex={0}
               className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
@@ -230,6 +230,13 @@ def edit(source: Path, out_dir: Path) -> Path:
     )
     assert old_footer in text, "footer disclaimer not found"
     text = text.replace(old_footer, new_footer)
+
+    # 4b) RAG card: its story moves to the wildcard-safe /projects path (the
+    #     app keeps owning /rag). /rag-overview* would also work but /projects/
+    #     is the convention shared with /projects/haze-watch.
+    rag_links = text.count("navigate('/rag-overview')")
+    assert rag_links == 2, f"expected 2 RAG card links, found {rag_links}"
+    text = text.replace("navigate('/rag-overview')", "navigate('/projects/rag-workbench')")
 
     # 5) grid -> carousel shell (outer > overflow-hidden > sliding track > slide 1)
     old_grid = '          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.12fr)_minmax(280px,0.88fr)] gap-5 lg:gap-6 max-w-5xl">'

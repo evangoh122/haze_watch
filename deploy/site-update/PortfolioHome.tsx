@@ -185,8 +185,8 @@ export default function PortfolioHome() {
                 <div className="w-full shrink-0">
             <div
               data-tour="project-card"
-              onClick={() => navigate('/rag-overview')}
-              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/rag-overview'))}
+              onClick={() => navigate('/projects/rag-workbench')}
+              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/projects/rag-workbench'))}
               role="button"
               tabIndex={0}
               className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
@@ -272,8 +272,8 @@ export default function PortfolioHome() {
               <div className="w-full shrink-0">
             <div
               data-tour="project-card"
-              onClick={() => navigate('/haze-watch')}
-              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/haze-watch'))}
+              onClick={() => navigate('/projects/haze-watch')}
+              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/projects/haze-watch'))}
               role="button"
               tabIndex={0}
               className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
