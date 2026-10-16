@@ -23,3 +23,9 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # Guard the subpath build: the app is routed at evangoh.com/haze-watch,
+      # and a broken base path only shows up when built with that prefix.
+      - name: Build (subpath /haze-watch/)
+        env:
+          VITE_BASE_PATH: /haze-watch/
+        run: npm run build

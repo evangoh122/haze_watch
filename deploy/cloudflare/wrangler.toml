@@ -1,0 +1,13 @@
+name = "haze-watch-route"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+# Only requests under /haze-watch hit this Worker; everything else on the domain
+# is served by the existing origin, untouched.
+#
+# The zone must already be on Cloudflare (evangoh.com is) and the hostnames
+# proxied, which they are.
+routes = [
+  { pattern = "evangoh.com/haze-watch*", zone_name = "evangoh.com" },
+  { pattern = "www.evangoh.com/haze-watch*", zone_name = "evangoh.com" }
+]
