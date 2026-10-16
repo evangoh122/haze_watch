@@ -164,7 +164,8 @@ per-run `MANIFEST.json` records exactly what left the machine.
 
 Historical FIRMS detections also accumulate as **GeoParquet** (WKB Point
 geometry + OGC `geo` metadata - readable by DuckDB spatial, GeoPandas, QGIS)
-under `history/fire_hotspots/year=YYYY.parquet` in the same dataset, synced by
+under `history/fire_hotspots/sensor=SENSOR/year=YYYY.parquet` in the same
+dataset, synced by
 `.github/workflows/firms-ingest.yml` (daily rolling window; `workflow_dispatch`
 runs full backfills, e.g. `start_date=2000-11-01 backfill_days=9500`). Year
 files merge on `hotspot_id`, so re-runs and overlapping windows never

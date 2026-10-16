@@ -3,7 +3,9 @@
 Pulls detections via the FIRMS area API (chunked <=5-day windows, deduplicated),
 writes GeoParquet (WKB Point geometry + GeoParquet ``geo`` metadata), merges
 with the per-year files already in the dataset and uploads to
-``history/fire_hotspots/year=YYYY.parquet`` in ``egoh33/haze-watch-historical``.
+``history/fire_hotspots/sensor=SENSOR/year=YYYY.parquet`` in
+``egoh33/haze-watch-historical`` (per-sensor files so concurrent sensor
+backfills never overwrite each other).
 
 The data is NASA FIRMS detections (public, attribution required) - the same
 class of data already distributed under ``runs/*/processed/fire_hotspots``.
@@ -29,18 +31,19 @@ DATASET = "egoh33/haze-watch-historical"
 HISTORY_PREFIX = "history/fire_hotspots"
 
 
-def history_path(year: int) -> str:
-    return f"{HISTORY_PREFIX}/year={year}.parquet"
+def history_path(sensor: str, year: int) -> str:
+    # Per-sensor files so concurrent sensor backfills never overwrite each other.
+    return f"{HISTORY_PREFIX}/sensor={sensor}/year={year}.parquet"
 
 
-def load_remote_year(dataset: str, year: int) -> pd.DataFrame | None:
+def load_remote_year(dataset: str, sensor: str, year: int) -> pd.DataFrame | None:
     """Download a stored year (without its geometry column) or None if absent."""
     from huggingface_hub import hf_hub_download
     from huggingface_hub.utils import EntryNotFoundError
 
     try:
         local = hf_hub_download(
-            repo_id=dataset, repo_type="dataset", filename=history_path(year)
+            repo_id=dataset, repo_type="dataset", filename=history_path(sensor, year)
         )
     except EntryNotFoundError:
         return None
@@ -92,7 +95,7 @@ def sync_history(
     for year_value, chunk in df.groupby(df["observation_time"].dt.year):
         year = int(year_value)
         # Read the remote year even on dry runs so this path is always exercised.
-        existing = load_remote_year(dataset, year)
+        existing = load_remote_year(dataset, sensor, year)
         merged = merge_hotspots(existing, chunk)
         out = out_dir / f"year={year}.parquet"
         points_to_geoparquet(merged, out)
@@ -100,7 +103,7 @@ def sync_history(
         if not dry_run:
             api.upload_file(
                 path_or_fileobj=str(out),
-                path_in_repo=history_path(year),
+                path_in_repo=history_path(sensor, year),
                 repo_id=dataset,
                 repo_type="dataset",
                 commit_message=f"firms history {year}: +{len(chunk)} rows -> {len(merged)} total",

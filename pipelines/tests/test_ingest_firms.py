@@ -240,3 +240,30 @@ def test_ingest_from_api_backfill_registers_range(tmp_path):
     assert "backfill_days=12" in entry["source"]
     assert "NRT" in entry["notes"]  # SP/NRT distinction recorded
     assert "KEY" not in entry["source"]
+
+
+def test_fetch_firms_area_empty_notice_returns_empty_frame():
+    client = _FakeClient("No hotspots available.")
+    df = fetch_firms_area("94,-11.5,141.5,6.5", 3, api_key="KEY", client=client)
+    assert len(df) == 0
+    assert "hotspot_id" in df.columns  # canonical schema preserved
+
+
+def test_fetch_firms_area_bad_key_raises():
+    client = _FakeClient("Invalid MAP_KEY. Please check your MAP_KEY.")
+    with pytest.raises(RuntimeError, match="FIRMS API error"):
+        fetch_firms_area("94,-11.5,141.5,6.5", 3, api_key="KEY", client=client)
+
+
+def test_fetch_firms_range_stops_at_today():
+    """Future windows must not be requested - a long backfill stops, not fails."""
+    from datetime import date as date_cls
+    from datetime import timedelta
+
+    client = _FakeClient(FIRMS_CSV)
+    future = (date_cls.today() + timedelta(days=3)).isoformat()
+    df = fetch_firms_range(
+        "94,-11.5,141.5,6.5", future, 30, api_key="KEY", client=client, sleep=None
+    )
+    assert client.urls == []  # nothing requested
+    assert len(df) == 0

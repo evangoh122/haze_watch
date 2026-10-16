@@ -108,6 +108,11 @@ def normalize_firms(
             "(expected real FIRMS schema acq_date/acq_time or derived acquired_date/acquired_time)"
         )
 
+    if len(df) == 0:
+        # Empty windows (e.g. plain-text API notices) skip the transforms below -
+        # empty object-dtype columns break the timestamp string concat.
+        return pd.DataFrame(columns=CANONICAL_COLUMNS)
+
     obs_time = pd.to_datetime(
         df[date_col].astype(str).str.strip()
         + " "
@@ -220,8 +225,33 @@ def fetch_firms_area(
 
     from io import StringIO
 
+    body = (response.text or "").strip()
+    first_line = body.splitlines()[0].lower() if body else ""
+    if "latitude" not in first_line:
+        lowered = body.lower()
+        if any(token in lowered for token in ("invalid", "error", "unauthorized", "forbidden", "key")):
+            raise RuntimeError(f"FIRMS API error for {url.rsplit('/', 4)[-4:]}: {body[:200]}")
+        # Empty windows come back as a plain-text notice - not an error.
+        return normalize_firms(
+            pd.DataFrame(
+                columns=[
+                    "latitude",
+                    "longitude",
+                    "acq_date",
+                    "acq_time",
+                    "satellite",
+                    "confidence",
+                    "frp",
+                    "daynight",
+                    "bright_ti4",
+                ]
+            ),
+            source=f"NASA_FIRMS_{sensor}",
+            available_lag_hours=settings.firms_availability_lag_hours,
+        )
+
     return normalize_firms(
-        pd.read_csv(StringIO(response.text)),
+        pd.read_csv(StringIO(body)),
         source=f"NASA_FIRMS_{sensor}",
         available_lag_hours=settings.firms_availability_lag_hours,
     )
@@ -258,9 +288,17 @@ def fetch_firms_range(
 
     frames: list[pd.DataFrame] = []
     offset = 0
+    from datetime import date as date_cls
+
+    today = date_cls.today()
     while offset < backfill_days:
         span = min(window_days, backfill_days - offset)
-        window_start = (start + timedelta(days=offset)).isoformat()
+        window_date = start + timedelta(days=offset)
+        if window_date > today:
+            if progress is not None:
+                progress(f"firms range stops at today ({today}); skipping future windows")
+            break
+        window_start = window_date.isoformat()
         if progress is not None:
             progress(f"firms window {window_start} +{span}d ({sensor})")
         frames.append(
