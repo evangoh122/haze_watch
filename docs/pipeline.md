@@ -176,6 +176,37 @@ uv run python scripts/sync_firms_history_to_hf.py --backfill-days 7
 uv run python scripts/sync_firms_history_to_hf.py --start-date 2000-11-01 --backfill-days 9500
 ```
 
+### Backfill operating notes (learned the hard way, 2026-10-16)
+
+- **Use `*_SP`, never `*_NRT`, for history.** The NRT sources only serve their
+  retention window: `MODIS_NRT` returns nothing before the current year, so a
+  2000-2025 sweep comes back "No hotspots available" for every window while the NRT
+  splits of the archive stay pure recency data. The `_SP` (Standard Processing)
+  lanes serve the full dated archive on the same API, and each sensor starts at a
+  different date: `MODIS_SP` 2000-11-01, `VIIRS_SNPP_SP` 2012-01-20,
+  `VIIRS_NOAA20_SP` 2018-04-01, `VIIRS_NOAA21_SP` 2023-03-01. Probe before a long
+  run: a month before the first date above returns an empty window, not an error.
+- **The MAP_KEY wall is ~500 requests / 10 min**, not the 5,000 NASA's docs
+  advertise. Measured: a lone lane died after ~499 windows in ~10 min with
+  `Exceeding allowed transaction limit.`, and four parallel lanes died inside the
+  same two seconds at ~440 requests combined. `fetch_firms_range` therefore paces
+  at `pace_seconds=1.0` plus ~0.9s round trip (~320 requests / 10 min, two thirds
+  of the wall), and a response carrying the transaction-limit notice (or HTTP 429)
+  backs off for minutes instead of the <=30s transient backoff.
+- **Dispatch backfills one lane at a time and wait for each to finish.** GitHub
+  keeps at most one *pending* run per concurrency group and cancels the older
+  queued one, so firing four together silently drops lanes - `cancel-in-progress:
+  false` only protects the run already executing. The daily `schedule` run can
+  likewise cancel a waiting backfill.
+- Each year uploads as it completes (per-sensor files, merged on `hotspot_id`), so
+  a late failure costs one year rather than the whole span. A run that dies on the
+  wall is safe to re-dispatch from the last completed year.
+
+The archive is currently complete: `MODIS_SP` 2000-2026 (27 files),
+`VIIRS_SNPP_SP` 2012-2026 (15), `VIIRS_NOAA20_SP` 2018-2026 (9),
+`VIIRS_NOAA21_SP` 2023-2026 (4) - 8.1M detections with no missing years, alongside
+the 1.5M-row NRT recency lanes.
+
 Agent integration: the analyst chat grounds on `LLM_DATA_DIR` - point it at
 `data/hf_history` after `fetch_history_from_hf.py` to answer from historical
 runs (see docs/llm.md).
@@ -195,10 +226,11 @@ runs (see docs/llm.md).
 
 ## Not yet implemented
 
-- FIRMS API live fetch is now wired (`ingest-firms --from-api`) and unit-tested
-  against a stubbed client, but has **not** been exercised against the live FIRMS API
-  from this repository - that needs a free MAP_KEY. The API caps a request at 10 days,
-  so longer backfills must be looped.
+- FIRMS API live fetch (`ingest-firms --from-api`) is wired, unit-tested against a
+  stubbed client, **and** exercised against the live API - the 2000-2026 history
+  archive in the HF dataset was built with it. The area API caps a request at 5 days
+  (`MAX_DAYS_PER_REQUEST`), so longer spans are looped, and the MAP_KEY quota wall is
+  ~500 requests / 10 min (see the operating notes above).
 - MapBiomas land-cover and peatland ingestion (`gfw-peatlands` source is wired but
   the WRI query endpoint was returning HTTP 500 at last check)
 - Scheduled execution: `.github/workflows/firms-ingest.yml` pulls daily and uploads the
