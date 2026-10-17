@@ -19,6 +19,10 @@ jobs:
         with:
           node-version: "20"
       - run: npm ci
+      # Production dependencies only: a dev-only advisory should not block a
+      # release, but a high/critical one that ships must.
+      - name: Dependency audit (production, fail on high+)
+        run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test

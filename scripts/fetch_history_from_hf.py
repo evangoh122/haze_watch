@@ -44,7 +44,8 @@ def fetch_history(dataset: str, dest: Path, run: str = "latest") -> dict:
         raise SystemExit(f"unknown run {run!r}; available: {run_ids}")
 
     local = Path(
-        snapshot_download(
+        # B615: resolving the latest run is the point here; --run pins one.
+        snapshot_download(  # nosec B615
             repo_id=dataset,
             repo_type="dataset",
             local_dir=str(dest),

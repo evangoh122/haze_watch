@@ -45,7 +45,7 @@ CANONICAL_COLUMNS = [
 
 def _hotspot_id(source: str, lat: float, lon: float, obs_time_iso: str) -> str:
     raw = f"{source}|{lat:.5f}|{lon:.5f}|{obs_time_iso}"
-    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
 
 
 def _confidence_to_pct(value: object) -> float:
