@@ -40,3 +40,21 @@ jobs:
         run: uv run pytest synthetic/tests
       - name: Private linkage tests (hand-sourced schema; synthetic fixtures)
         run: uv run pytest private/tests
+
+      # --- gates added 2026-10-17 -------------------------------------
+      - name: Lockfile in sync with pyproject files
+        run: uv lock --check
+
+      # Medium and above fails. The remaining lows are intentional: `random` for
+      # retry jitter and a `git ls-files` subprocess in the data guard.
+      - name: Security lint (bandit, medium+)
+        run: uv run --with bandit bandit -q -ll -r backend pipelines private scripts --exclude "*/tests/*"
+
+      - name: Dependency audit (pip-audit)
+        run: |
+          uv export --format requirements-txt --no-hashes --no-dev -o "${RUNNER_TEMP}/requirements.txt"
+          uv run --with pip-audit pip-audit -r "${RUNNER_TEMP}/requirements.txt"
+
+      # 89% measured on 2026-10-17; the floor is headroom, not a target.
+      - name: Coverage floor (85%)
+        run: uv run --with pytest-cov pytest backend/tests pipelines/tests private/tests synthetic/tests -q --cov --cov-fail-under=85

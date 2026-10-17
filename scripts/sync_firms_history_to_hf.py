@@ -42,7 +42,8 @@ def load_remote_year(dataset: str, sensor: str, year: int) -> pd.DataFrame | Non
     from huggingface_hub.utils import EntryNotFoundError
 
     try:
-        local = hf_hub_download(
+        # B615: the per-sensor/year path is the pin; --start-date/--sensor scope it.
+        local = hf_hub_download(  # nosec B615
             repo_id=dataset, repo_type="dataset", filename=history_path(sensor, year)
         )
     except EntryNotFoundError:

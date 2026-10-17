@@ -200,7 +200,10 @@ def _cmd_query(args: argparse.Namespace) -> int:
     try:
         if args.file:
             escaped = str(Path(args.file)).replace("'", "''")
-            con.execute(f"CREATE VIEW dataset AS SELECT * FROM read_parquet('{escaped}')")
+            con.execute(
+                # the only interpolation here is the SQL-quote-escaped local path above
+                f"CREATE VIEW dataset AS SELECT * FROM read_parquet('{escaped}')"  # nosec B608
+            )
             if spatial:
                 try:
                     con.execute(

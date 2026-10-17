@@ -1,6 +1,12 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
+import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import "maplibre-gl/dist/maplibre-gl.css";
+
+// maplibre-gl v5+ loads its tile worker from a separate module; under a bundler the
+// default URL resolution fails ("Worker failed to load"), so point it at the asset
+// Vite emits for us.
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 import { getExposureSummary, getHotspots, getPublicExposure, type ExposureSummary, type HotspotResponse } from "../lib/dataApi";
 import { SYNTHETIC_COMPANIES } from "../data/syntheticCompanies";
 

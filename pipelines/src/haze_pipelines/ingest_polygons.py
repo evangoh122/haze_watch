@@ -94,7 +94,7 @@ ATTRIBUTION_COLUMNS = ["company_attribution", "group_attribution", "source_featu
 def anonymized_id(source_dataset: str, source_feature_id: str) -> str:
     """Stable, non-semantic public identifier for a polygon."""
     raw = f"{source_dataset}::{source_feature_id}"
-    return "poly_" + hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+    return "poly_" + hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
 
 
 def fetch_arcgis_features(
@@ -161,7 +161,7 @@ def fetch_arcgis_features(
             for feature in batch:
                 props = feature.get("properties") or {}
                 fid = str(props.get("gfwid") or props.get("objectid") or "")
-                key = fid or hashlib.sha1(str(feature).encode("utf-8")).hexdigest()
+                key = fid or hashlib.sha1(str(feature).encode("utf-8"), usedforsecurity=False).hexdigest()
                 collected[key] = feature
 
             offset += len(batch)
