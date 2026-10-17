@@ -12,16 +12,22 @@ import {
   ShieldCheck,
   Wind,
 } from 'lucide-react';
+import CoachMarks, { useTour } from '../components/CoachMarks';
+import { HAZEWATCH_TOUR, HAZEWATCH_TOUR_KEY } from '../components/tourSteps';
 import { DisclaimerFooter } from '../components/Disclaimer';
 
 // The app lives on the portfolio domain at /haze-watch (Cloudflare Worker ->
 // app container, per deploy/cloudflare). No .hf.space host appears anywhere.
 // www is the canonical host: the apex (evangoh.com) returns a 522 over HTTPS,
 // so the link must not point at it.
+// The CTAs are plain anchors: same-origin, so they navigate in the same tab (it
+// was window.open(..., '_blank') from when the app was a separate HF origin).
+// An anchor also keeps middle-click / ctrl-click "open in new tab" available.
 const APP_URL = 'https://www.evangoh.com/haze-watch';
 
 export default function HazeWatch() {
   const navigate = useNavigate();
+  const tour = useTour(HAZEWATCH_TOUR_KEY);
 
   useEffect(() => {
     document.title = 'Haze Watch - Historical fire, weather and haze for lenders';
@@ -73,13 +79,14 @@ export default function HazeWatch() {
               studied across the big El Niño fire years - 2015, 2019, 2023-24.
             </p>
             <div className="flex flex-wrap gap-4 mt-8">
-              <button
-                onClick={() => window.open(APP_URL, '_blank', 'noopener,noreferrer')}
+              <a
+                data-tour="app-cta"
+                href={APP_URL}
                 className="fintech-button px-5 py-2.5 group"
               >
                 <Play size={16} className="fill-white" />
                 Open the app
-              </button>
+              </a>
               <a
                 href="#historical-data"
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border/80 hover:bg-surface-elevated/40 text-primary font-semibold transition-all duration-200 cursor-pointer"
@@ -122,7 +129,7 @@ export default function HazeWatch() {
           </aside>
         </section>
 
-        <section id="historical-data" className="scroll-mt-20 animate-in fade-in slide-in-from-bottom-4 duration-450">
+        <section id="historical-data" data-tour="historical-data" className="scroll-mt-20 animate-in fade-in slide-in-from-bottom-4 duration-450">
           <div className="flex items-center gap-3 mb-3">
             <span className="editorial-rule" />
             <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-primary m-0">
@@ -287,7 +294,7 @@ export default function HazeWatch() {
           </div>
         </section>
 
-        <section id="how-it-works" className="scroll-mt-20 animate-in fade-in slide-in-from-bottom-5 duration-600">
+        <section id="how-it-works" data-tour="how-it-works" className="scroll-mt-20 animate-in fade-in slide-in-from-bottom-5 duration-600">
           <div className="flex items-center gap-3 mb-7">
             <span className="editorial-rule" />
             <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-primary m-0">
@@ -383,17 +390,19 @@ export default function HazeWatch() {
             <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">DuckDB</span>
             <span className="text-[10px] font-mono font-medium px-2 py-0.5 bg-surface-elevated border border-border text-secondary rounded">Hugging Face Spaces</span>
           </div>
-          <button
-            onClick={() => window.open(APP_URL, '_blank', 'noopener,noreferrer')}
+          <a
+            href={APP_URL}
             className="fintech-button px-5 py-2.5 group"
           >
             <Play size={16} className="fill-white" />
             Open the app
-          </button>
+          </a>
         </section>
       </main>
 
       <DisclaimerFooter />
+
+      <CoachMarks steps={HAZEWATCH_TOUR} run={tour.run} onClose={tour.close} />
     </div>
   );
 }
