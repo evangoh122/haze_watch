@@ -8,26 +8,24 @@ routing that puts the demo at `www.evangoh.com/haze-watch`.
 
 ```bash
 cp .env.example .env        # fill in FIRMS_API_KEY etc.
-docker compose up --build   # PostGIS + FastAPI + React dev server
+docker compose up --build   # PostGIS + FastAPI
 ```
 
 | Service | Port | Notes |
 |---|---|---|
 | db | 5432 | postgis/postgis:16-3.4, named volume `pgdata`; bound to 127.0.0.1 |
 | backend | 8000 | uvicorn with reload; code mounted at `/app` |
-| frontend | 5173 | Vite dev server (served at `/`, API proxied to the backend) |
 
-The dev frontend runs at the **root** (`VITE_BASE_PATH` unset), so nothing about
-the subpath deployment affects local development.
+The frontend lives in the separate `evangoh-frontend` repo now — see its own
+README for local dev setup. Point it at this backend's `http://localhost:8000`.
 
 ## Demo container (backend-only)
 
 `deploy/hf-space/Dockerfile` builds a Python-only image: FastAPI/uvicorn
-serves the API directly on the Space's public port. The frontend (this
-repo's `frontend/`) is no longer deployed from here — it was imported into
-`evangoh-frontend`, which serves `/haze-watch/*` itself in production.
-`frontend/` still exists in this repo for local development
-(`docker compose up`), it's just not part of the Space image anymore.
+serves the API directly on the Space's public port. The frontend was
+imported into `evangoh-frontend`, which serves `/haze-watch/*` itself in
+production — this repo (including `docker-compose.yml`) is backend-only now,
+`frontend/` has been removed entirely.
 
 ```bash
 # Prerequisite: data/processed/ is gitignored, so the pipeline outputs must
@@ -69,7 +67,7 @@ route is fixed.
 | Worker | `deploy/cloudflare/worker.js`, `wrangler.toml` |
 | Prefix handling | the Worker itself (`/haze-watch/api/` → `/api/`) |
 | Non-API `/haze-watch/*` | served by `evangoh-frontend`'s own origin, not this Space |
-| Subpath build (local dev only) | `frontend/vite.config.ts` (`base`), `src/main.tsx` (router basename), `src/lib/api.ts` (API base) |
+| Subpath build (in `evangoh-frontend`) | `src/haze-watch/lib/api.ts` (API base) |
 | App link | portfolio `HazeWatch.tsx` `APP_URL` = `https://www.evangoh.com/haze-watch` |
 
 No Cloudflare or Hugging Face payment is required for this setup — the Worker
