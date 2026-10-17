@@ -1,45 +1,25 @@
-# Haze Watch - Hugging Face Space (single container)
+# Haze Watch - Hugging Face Space (backend-only)
 #
-# DEPLOYED 2026-10-16 to https://huggingface.co/spaces/egoh33/haze-watch
-# (public; no secrets set - the deterministic data-grounded fallback answers).
-# Build/redeploy notes:
-#   1. Create Space egoh33/haze-watch (Docker SDK, private first)
-#   2. Build context is the PROJECT REPO ROOT (paths below are repo-root
-#      relative: frontend/, backend/, data/, deploy/hf-space/). For the Space,
-#      push the repo root as the Space repo root with this file at /Dockerfile
-#      (cp deploy/hf-space/Dockerfile ./Dockerfile), or test locally with:
-#          docker build -f deploy/hf-space/Dockerfile .
-#   3. Set secrets: LLM_BASE_URL / LLM_API_KEY / LLM_MODEL (DeepSeek), FIRMS_API_KEY
+# The frontend moved to evangoh-frontend (which bundles its own copy of the
+# Haze Watch app, imported during the evangoh.com frontend split). This
+# Space now serves only the API, reached in production via the Cloudflare
+# Worker's /haze-watch/api* rule (see deploy/cloudflare/) which strips the
+# /haze-watch prefix before forwarding here.
 #
-# Mirrors the RAG Workbench pattern: nginx serves the built React frontend and
-# proxies /api to uvicorn, both managed by supervisord in one container.
+# Build context is the PROJECT REPO ROOT (paths below are repo-root
+# relative: backend/, data/). For the Space, push the repo root as the
+# Space repo root with this file at /Dockerfile, or test locally with:
+#     docker build -f deploy/hf-space/Dockerfile .
+#
+# Set secrets: LLM_BASE_URL / LLM_API_KEY / LLM_MODEL (DeepSeek), FIRMS_API_KEY
 #
 # Precomputed data note (docs/pipeline.md): the app serves precomputed pipeline
 # outputs (Parquet/GeoJSON). No external GIS service is queried per page load.
 
-FROM node:20-slim AS frontend-build
-WORKDIR /build
-# The image serves the app at evangoh.com/haze-watch, so the SPA is built with
-# the matching path prefix. Pass --build-arg VITE_BASE_PATH=/ for a root-served
-# image (see docs/deployment.md).
-ARG VITE_BASE_PATH=/haze-watch/
-ENV VITE_BASE_PATH=${VITE_BASE_PATH}
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
-COPY frontend/ ./
-RUN npm run build
-
 FROM python:3.12-slim
 WORKDIR /app
 
-# nginx + supervisord are NOT in the python base image and are not pip
-# dependencies - install them explicitly (CMD below runs supervisord).
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends nginx supervisor \
-    && rm -rf /var/lib/apt/lists/*
-
 # Backend deps + package
-COPY pyproject.toml ./
 COPY backend/ ./backend/
 RUN pip install --no-cache-dir ./backend
 
@@ -55,12 +35,11 @@ COPY data/processed/fire_hotspots.parquet /app/data/processed/fire_hotspots.parq
 COPY data/processed/forecast_baseline.parquet /app/data/processed/forecast_baseline.parquet
 COPY data/metadata/registry.json /app/data/metadata/registry.json
 
-# Frontend build + serving config
-COPY --from=frontend-build /build/dist /app/frontend/dist
-COPY deploy/hf-space/nginx.conf /etc/nginx/nginx.conf
-COPY deploy/hf-space/supervisord.conf /etc/supervisord.conf
-
-ENV LLM_DATA_DIR=/app/data
+# config.py reads DATA_DIR (or HAZE_DATA_DIR) — the deployed Space also sets
+# this itself via its own Settings -> Variables, which is what's actually
+# load-bearing in production; this ENV just makes a local `docker run` work
+# without extra flags.
+ENV DATA_DIR=/app/data
 
 EXPOSE 7860
-CMD ["supervisord", "-c", "/etc/supervisord.conf"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
