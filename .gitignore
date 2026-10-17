@@ -13,6 +13,7 @@ venv/
 node_modules/
 dist/
 .vite/
+.wrangler/
 
 # Environment and secrets
 .env

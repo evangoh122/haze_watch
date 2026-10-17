@@ -8,36 +8,38 @@ routing that puts the demo at `www.evangoh.com/haze-watch`.
 
 ```bash
 cp .env.example .env        # fill in FIRMS_API_KEY etc.
-docker compose up --build   # PostGIS + FastAPI + React dev server
+docker compose up --build   # PostGIS + FastAPI
 ```
 
 | Service | Port | Notes |
 |---|---|---|
 | db | 5432 | postgis/postgis:16-3.4, named volume `pgdata`; bound to 127.0.0.1 |
 | backend | 8000 | uvicorn with reload; code mounted at `/app` |
-| frontend | 5173 | Vite dev server (served at `/`, API proxied to the backend) |
 
-The dev frontend runs at the **root** (`VITE_BASE_PATH` unset), so nothing about
-the subpath deployment affects local development.
+The frontend lives in the separate `evangoh-frontend` repo now — see its own
+README for local dev setup. Point it at this backend's `http://localhost:8000`.
 
-## Demo container (single image)
+## Demo container (backend-only)
 
-`deploy/hf-space/Dockerfile` builds one image: the React app is built in a Node
-stage, then nginx serves it and proxies `/api` to uvicorn; supervisord runs both.
+`deploy/hf-space/Dockerfile` builds a Python-only image: FastAPI/uvicorn
+serves the API directly on the Space's public port. The frontend was
+imported into `evangoh-frontend`, which serves `/haze-watch/*` itself in
+production — this repo (including `docker-compose.yml`) is backend-only now,
+`frontend/` has been removed entirely.
 
 ```bash
 # Prerequisite: data/processed/ is gitignored, so the pipeline outputs must
 # exist (or be copied in) before building - the Dockerfile COPYs them.
 docker build -f deploy/hf-space/Dockerfile -t haze-watch .
 docker run -p 7860:7860 haze-watch
-# -> http://localhost:7860/haze-watch/
+# -> http://localhost:7860/api/v1/health
 ```
 
 Key points:
 
-- The frontend is built with `VITE_BASE_PATH=/haze-watch/`, so every asset URL
-  and the API base (`/haze-watch/api/v1`) already carry the prefix. Pass
-  `--build-arg VITE_BASE_PATH=/` to produce a root-served image instead.
+- The app serves on `/api/v1/*` directly (`settings.api_prefix`) — no nginx,
+  no prefix-stripping happens in this container anymore. The Cloudflare
+  Worker does that instead (see below).
 - The image bakes the public pipeline outputs (the anonymized
   `exposure_public.geojson`, the summary, the fixtures-labelled hotspot file, the
   baseline forecast and the provenance registry). The real-restricted
@@ -47,9 +49,12 @@ Key points:
 
 ## Public routing: www.evangoh.com/haze-watch
 
-A Cloudflare Worker handles only the `/haze-watch*` route and proxies to the
-Space; the rest of the domain is untouched. Full steps, verification commands and
-cost notes are in `deploy/cloudflare/README.md`.
+A Cloudflare Worker handles only `/haze-watch/api*` (and the separate
+`/api*` rule for the RAG Workbench backend) and proxies to this Space;
+every other request on the domain, including non-API `/haze-watch/*`
+(the SPA pages/assets), is served directly by `evangoh-frontend`'s own
+origin. Full steps, verification commands and cost notes are in
+`deploy/cloudflare/README.md`.
 
 `www.evangoh.com` is canonical — the apex `evangoh.com` returns **522** over
 HTTPS on every path (a Cloudflare->origin failure specific to that hostname;
@@ -58,10 +63,11 @@ route is fixed.
 
 | Piece | Where |
 |---|---|
-| Route pattern | `www.evangoh.com/haze-watch*` (apex route kept as a fallback) |
+| Route pattern | `www.evangoh.com/haze-watch/api*` (apex route kept as a fallback) |
 | Worker | `deploy/cloudflare/worker.js`, `wrangler.toml` |
-| Prefix handling | `deploy/hf-space/nginx.conf` (strips `/haze-watch`) |
-| Subpath build | `frontend/vite.config.ts` (`base`), `src/main.tsx` (router basename), `src/lib/api.ts` (API base) |
+| Prefix handling | the Worker itself (`/haze-watch/api/` → `/api/`) |
+| Non-API `/haze-watch/*` | served by `evangoh-frontend`'s own origin, not this Space |
+| Subpath build (in `evangoh-frontend`) | `src/haze-watch/lib/api.ts` (API base) |
 | App link | portfolio `HazeWatch.tsx` `APP_URL` = `https://www.evangoh.com/haze-watch` |
 
 No Cloudflare or Hugging Face payment is required for this setup — the Worker

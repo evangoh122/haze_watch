@@ -55,5 +55,7 @@ POST /api/v1/chat
 
 ## UI
 
-`frontend/src/components/chat/ChatPanel.tsx`, routed at `/chat` - shows the
-reply, provenance sources, fallback badge and guardrail flags.
+Lives in the separate `evangoh-frontend` repo now
+(`src/haze-watch/components/chat/ChatPanel.tsx`), routed at `/haze-watch/chat`
+there - shows the reply, provenance sources, fallback badge and guardrail
+flags.

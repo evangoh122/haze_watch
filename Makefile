@@ -2,7 +2,6 @@
 
 setup:
 	uv sync --all-packages
-	cd frontend && npm install
 
 up:
 	docker compose up --build
@@ -16,12 +15,9 @@ test:
 	uv run pytest pipelines/tests
 	uv run pytest synthetic/tests
 	uv run pytest private/tests
-	cd frontend && npm run typecheck
-	cd frontend && npm test
 
 lint:
 	uv run ruff check backend ml pipelines synthetic private scripts
-	cd frontend && npm run lint
 
 # Weather window for the ingest-weather target (override: make ingest-weather START=... END=...)
 START ?= 2026-01-01

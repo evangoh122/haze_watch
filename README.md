@@ -30,7 +30,7 @@ statements, bank exposures and insurance policies.
 | Concession download w/ license gate + anonymized export | **Done** |
 | Point-in-time feature building (leakage-safe) | **Done** |
 | Baseline hazard score (deterministic, labeled) | **Done — not a model** |
-| Environment (Docker Compose, CI) | Wired; 4 GitHub Actions workflows (python, frontend, security, firms-ingest) |
+| Environment (Docker Compose, CI) | Wired; 3 GitHub Actions workflows (python, security, firms-ingest) |
 | LLM chat layer (`backend/app/llm/`) | **Done — grounded chat API + UI panel** |
 | DeepSeek / OpenAI-compatible provider | Wired; live calls need `LLM_API_KEY` (`scripts/deepseek_review.py` for reviews) |
 | SCQA website + banking demo | **Done — landing narrative + working stress-test demo (26 frontend tests)** |
@@ -73,22 +73,23 @@ haze_watch/
 │   │   ├── schemas/    Pydantic request/response schemas
 │   │   └── services/   Hazard scoring, exposure, scenario engines
 │   └── tests/          pytest unit and integration tests
-├── frontend/           React + TypeScript + Tailwind + MapLibre GL JS
-│   └── src/pages/      10 core dashboard pages
 ├── ml/                 Geospatial ML: features, models, training, evaluation
 ├── pipelines/          Batch ingestion and scheduled inference jobs
 ├── synthetic/          Synthetic financial / corporate / insurance data engine
 ├── data/               raw | interim | processed | synthetic (+ provenance metadata)
 ├── docs/               Architecture, data model, API contract, evaluation, licensing
-└── .github/workflows/  CI: python, frontend, security (gitleaks), firms-ingest
+└── .github/workflows/  CI: python, security (gitleaks), firms-ingest
 ```
+
+The frontend (React + TypeScript + Tailwind + MapLibre GL JS) lives in the
+separate `evangoh-frontend` repo now, which serves it directly in production.
 
 ## Quickstart (local)
 
 ```bash
 cp .env.example .env
-docker compose up --build       # PostgreSQL/PostGIS + FastAPI + React
-make test                       # data guard + pytest (backend, pipelines, synthetic) + frontend
+docker compose up --build       # PostgreSQL/PostGIS + FastAPI
+make test                       # data guard + pytest (backend, pipelines, synthetic)
 make ingest-firms               # ingest FIRMS CSVs from data/raw/firms (no key needed;
                                 # FIRMS_API_KEY only enables live API fetch)
 ```
