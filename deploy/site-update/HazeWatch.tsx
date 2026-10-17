@@ -56,9 +56,9 @@ export default function HazeWatch() {
                 <Flame size={24} />
               </div>
               <p className="text-xs font-mono text-accent-bright m-0">Geospatial climate risk for lenders</p>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-mono font-semibold text-amber-500">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 status-pulse" />
-                historical backfill in progress
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent/8 px-2.5 py-1 text-[10px] font-mono font-semibold text-accent-bright">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+                fire archive 2000-2026 complete
               </span>
             </div>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-semibold tracking-tight leading-[0.98] text-primary m-0 max-w-3xl text-balance">
@@ -67,10 +67,10 @@ export default function HazeWatch() {
             <p className="text-secondary text-base leading-8 font-light mt-7 max-w-3xl text-pretty">
               Haze Watch joins real NASA fire observations and reanalysis weather to concession
               geography, then runs auditable credit stress scenarios over the same numbers a credit
-              memo would cite. The project is mid-backfill: a 25-year detection record (MODIS since
-              2000, VIIRS since 2012) and 85 years of reanalysis weather (ERA5, 1940 onward) are
-              being assembled into a versioned GeoParquet history store, so the hazard-to-cash-flow
-              link can be studied across the big El Niño fire years - 2015, 2019, 2023-24.
+              memo would cite. The 25-year detection record (MODIS since 2000, VIIRS since 2012)
+              is assembled: 9.6M detections in a versioned GeoParquet store, per sensor and year.
+              The weather and peat panels join it next, so the hazard-to-cash-flow link can be
+              studied across the big El Niño fire years - 2015, 2019, 2023-24.
             </p>
             <div className="flex flex-wrap gap-4 mt-8">
               <button
@@ -130,8 +130,8 @@ export default function HazeWatch() {
             </h2>
           </div>
           <p className="text-secondary text-base leading-8 font-light max-w-3xl mb-8">
-            The work right now is the record itself: pulling the full detection history into a
-            versioned GeoParquet store (per sensor, per year, deduplicated), so every later claim
+            The record is the foundation: the full detection history now sits in a versioned
+            GeoParquet store (per sensor, per year, deduplicated), so every later claim
             rests on the same evidence. Sources and their true depths:
           </p>
 
@@ -139,27 +139,28 @@ export default function HazeWatch() {
             <div className="glass-card rounded-2xl p-5">
               <div className="flex items-center justify-between mb-3">
                 <Flame size={15} className="text-accent-bright" />
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-mono text-amber-500">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 status-pulse" />
-                  backfill running
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent/8 px-2 py-0.5 text-[9px] font-mono text-accent-bright">
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+                  archive complete
                 </span>
               </div>
               <h4 className="text-sm font-semibold text-primary mb-2">Fire detections (NASA FIRMS)</h4>
               <p className="text-[11px] text-secondary/80 leading-relaxed m-0">
-                MODIS from November 2000 (Terra), VIIRS from 2012 (S-NPP), 2020 (NOAA-20) and 2024
-                (NOAA-21). Being merged into per-sensor, per-year GeoParquet year files with
-                detection-level provenance.
+                MODIS from November 2000 (Terra), VIIRS from 2012 (S-NPP), 2018/2020 (NOAA-20) and
+                2023/2024 (NOAA-21). 9.6M detections merged into per-sensor, per-year GeoParquet
+                year files with detection-level provenance.
               </p>
             </div>
             <div className="glass-card rounded-2xl p-5">
               <div className="flex items-center justify-between mb-3">
                 <Wind size={15} className="text-accent-bright" />
-                <span className="text-[9px] font-mono text-secondary/60 border border-border/60 rounded-full px-2 py-0.5">available</span>
+                <span className="text-[9px] font-mono text-secondary/60 border border-border/60 rounded-full px-2 py-0.5">panel next</span>
               </div>
               <h4 className="text-sm font-semibold text-primary mb-2">Weather (ERA5 reanalysis)</h4>
               <p className="text-[11px] text-secondary/80 leading-relaxed m-0">
-                Temperature, rainfall, humidity and wind from 1940 onward - deep enough to cover
-                every modern El Niño drought episode behind the major fire years.
+                ERA5 reanalysis reaches back to 1940 (via Open-Meteo) - deep enough for every
+                modern El Niño drought episode. The project's daily weather panel over that span
+                is the next build step.
               </p>
             </div>
             <div className="glass-card rounded-2xl p-5">
@@ -194,11 +195,11 @@ export default function HazeWatch() {
               work in progress
             </div>
             <p className="text-xs text-secondary/80 leading-relaxed m-0">
-              The 2000-to-today detection archive is being backfilled right now (chunked API
-              windows, merged per sensor and year). Figures elsewhere on this page - 300 real
-              concession polygons, 24-72h hazard horizons - reflect the current sample run, not
-              the finished archive. The modeling phase (historical financial data joined to the
-              hazard panel) starts once the backfill lands.
+              The fire archive is complete: 9.6M detections, 2000-2026, per sensor and year.
+              What is still in progress is everything built on top of it - the daily weather
+              panel, peat/land-cover covariates, and the financial join. Figures elsewhere on
+              this page - 300 real concession polygons, 24-72h hazard horizons - reflect the
+              sample run the live app serves, not the full archive.
             </p>
           </div>
         </section>
