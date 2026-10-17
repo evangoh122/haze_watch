@@ -6,10 +6,12 @@ out to its repository).
 
 Replaces the "Enterprise infrastructure / Market data architecture notes"
 (Blueprint) card with the Haze Watch card and converts the two project cards to
-a SWIPER carousel (swiper/react, one card per view, prev/next buttons and dot
-indicators, ArrowLeft/ArrowRight, swipe on touch). The inactive slide is marked
-``inert`` + ``aria-hidden`` via SwiperSlide's render function so a keyboard user
-cannot tab into - or activate - the clipped card. Output (NOT uploaded here):
+a STACKED CARD DECK (no library): the cards share one grid cell and are placed by
+their offset from the active index, so the two behind poke out on the right (and
+the mirror on the left keeps it symmetric). Cards that are not in front are
+``inert`` + ``aria-hidden``, so a keyboard user cannot tab into - or activate - a
+card they cannot see; clicking a card behind the front one brings it forward.
+Output (NOT uploaded here):
 
   deploy/site-update/PortfolioHome.tsx   full edited file
   deploy/site-update/PortfolioHome.patch unified diff against the live version
@@ -43,9 +45,9 @@ CARD = """            <div
               onClick={() => navigate('/projects/haze-watch')}
               onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/projects/haze-watch'))}
               role="button"
-              tabIndex={isActive ? 0 : -1}
-              aria-hidden={!isActive}
-              inert={!isActive}
+              tabIndex={activeProject === 1 ? 0 : -1}
+              aria-hidden={activeProject !== 1}
+              inert={activeProject !== 1}
               className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
             >
               <div className="absolute top-0 right-0 w-40 h-40 bg-accent/10 rounded-full blur-3xl group-hover:bg-accent/15 transition-colors pointer-events-none" />
@@ -126,30 +128,19 @@ CARD = """            <div
             </div>"""
 
 CAROUSEL_OPEN = """          <div className="relative max-w-5xl">
-            <Swiper
-              modules={[A11y, Keyboard, Navigation]}
-              slidesPerView={1.15}
-              spaceBetween={28}
-              centeredSlides
-              rewind
-              watchSlidesProgress
-              keyboard={{ enabled: true }}
-              a11y={{
-                enabled: true,
-                containerMessage: 'Selected work',
-                containerRoleDescriptionMessage: 'carousel',
-                slideRole: 'group',
-              }}
-              navigation={{ prevEl: '.haze-proj-prev', nextEl: '.haze-proj-next' }}
-              onSwiper={(instance) => {
-                setSwiper(instance);
-                setSlideCount(instance.slides.length);
-              }}
-              onSlideChange={(instance) => setActiveProject(instance.activeIndex)}
-              className="overflow-hidden haze-proj-swiper"
+            <div
+              className="haze-deck relative"
+              role="group"
+              aria-roledescription="carousel"
+              aria-label="Selected work"
+              tabIndex={0}
+              onKeyDown={onDeckKeyDown}
+              onPointerDown={onDeckPointerDown}
+              onPointerUp={onDeckPointerUp}
+              onPointerCancel={onDeckPointerUp}
+              onClickCapture={onDeckClickCapture}
             >
-              <SwiperSlide>
-                {({ isActive }) => ("""
+              <div className="haze-deck-card" data-offset={deckOffset(0)} {...deckCardProps(0)}>"""
 
 SLIDE_BOUNDARY_OLD = """            </div>
 
@@ -157,11 +148,9 @@ SLIDE_BOUNDARY_OLD = """            </div>
               onClick={() => navigate('/rag', { state: { initialView: 'stocks' } })}"""
 
 SLIDE_BOUNDARY_NEW = """            </div>
-                )}
-              </SwiperSlide>
+              </div>
 
-              <SwiperSlide>
-                {({ isActive }) => (
+              <div className="haze-deck-card" data-offset={deckOffset(1)} {...deckCardProps(1)}>
             <div
               onClick={() => navigate('/rag', { state: { initialView: 'stocks' } })}"""
 
@@ -170,9 +159,9 @@ QUANT_CARD = """            <a
               href="https://github.com/evangoh122/quant_platform_1"
               target="_blank"
               rel="noopener noreferrer"
-              tabIndex={isActive ? 0 : -1}
-              aria-hidden={!isActive}
-              inert={!isActive}
+              tabIndex={activeProject === 2 ? 0 : -1}
+              aria-hidden={activeProject !== 2}
+              inert={activeProject !== 2}
               className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
             >
               <div className="absolute top-0 right-0 w-40 h-40 bg-accent/10 rounded-full blur-3xl group-hover:bg-accent/15 transition-colors pointer-events-none" />
@@ -253,18 +242,16 @@ QUANT_CARD = """            <a
             </a>"""
 
 CAROUSEL_TAIL = """            </div>
-                )}
-              </SwiperSlide>
-              <SwiperSlide>
-                {({ isActive }) => (
+              </div>
+              <div className="haze-deck-card" data-offset={deckOffset(2)} {...deckCardProps(2)}>
             <a
               data-tour="project-card"
               href="https://github.com/evangoh122/quant_platform_1"
               target="_blank"
               rel="noopener noreferrer"
-              tabIndex={isActive ? 0 : -1}
-              aria-hidden={!isActive}
-              inert={!isActive}
+              tabIndex={activeProject === 2 ? 0 : -1}
+              aria-hidden={activeProject !== 2}
+              inert={activeProject !== 2}
               className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
             >
               <div className="absolute top-0 right-0 w-40 h-40 bg-accent/10 rounded-full blur-3xl group-hover:bg-accent/15 transition-colors pointer-events-none" />
@@ -343,25 +330,25 @@ CAROUSEL_TAIL = """            </div>
                 </span>
               </div>
             </a>
-                )}
-              </SwiperSlide>
-            </Swiper>
+              </div>
+            </div>
           <div className="mt-6 flex items-center justify-center gap-4" role="group" aria-label="Project carousel">
             <button
               type="button"
               aria-label="Previous project"
+              onClick={() => moveProject(-1)}
               className="haze-proj-prev flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-surface-elevated/40 text-secondary transition-colors hover:border-accent/50 hover:text-primary cursor-pointer"
             >
               ‹
             </button>
             <div className="flex items-center gap-2">
-              {Array.from({ length: slideCount }, (_, i) => (
+              {PROJECT_TITLES.map((_, i) => (
                 <button
                   key={i}
                   type="button"
                   aria-label={`Show project ${i + 1}`}
                   aria-current={activeProject === i}
-                  onClick={() => swiper?.slideTo(i)}
+                  onClick={() => setActiveProject(i)}
                   className={`h-2 rounded-full transition-all duration-200 cursor-pointer ${activeProject === i ? 'w-6 bg-accent' : 'w-2 bg-border hover:bg-secondary'}`}
                 />
               ))}
@@ -369,6 +356,7 @@ CAROUSEL_TAIL = """            </div>
             <button
               type="button"
               aria-label="Next project"
+              onClick={() => moveProject(1)}
               className="haze-proj-next flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-surface-elevated/40 text-secondary transition-colors hover:border-accent/50 hover:text-primary cursor-pointer"
             >
               ›
@@ -392,34 +380,78 @@ def edit(source: Path, out_dir: Path) -> Path:
     old_react_import = "import type { KeyboardEvent } from 'react';"
     assert old_react_import in text, "react import line not found"
     text = text.replace(
-        old_react_import, "import { useState } from 'react';\n" + old_react_import
+        old_react_import,
+        "import { useRef, useState } from 'react';\n"
+        "import type { HTMLAttributes, KeyboardEvent, MouseEvent, PointerEvent } from 'react';",
     )
 
-    # 1b) Swiper drives the carousel; only the core + a11y stylesheets are pulled
-    #     in, so the bespoke Tailwind button/dot styling is unchanged.
-    disclaimer_import = "import { DisclaimerFooter } from '../components/Disclaimer';"
-    assert disclaimer_import in text, "DisclaimerFooter import not found"
+    # 1b) the deck needs the card titles up front (dots + the labels of the cards
+    #     behind the front one).
+    component_marker = "export default function PortfolioHome() {"
+    assert component_marker in text, "component declaration not found"
     text = text.replace(
-        disclaimer_import,
-        disclaimer_import
-        + "\nimport { Swiper, SwiperSlide } from 'swiper/react';"
-        + "\nimport type { SwiperClass } from 'swiper/react';"
-        + "\nimport { A11y, Keyboard, Navigation } from 'swiper/modules';"
-        + "\nimport 'swiper/css';"
-        + "\nimport 'swiper/css/a11y';",
+        component_marker,
+        "const PROJECT_TITLES = ['RAG Workbench', 'Haze Watch', 'Quant Platform'];\n"
+        "const PROJECT_COUNT = PROJECT_TITLES.length;\n\n"
+        + component_marker,
     )
 
-    # 2) carousel state: the instance for dot navigation + the active index for
-    #    aria-current (Swiper itself does not re-render React on slide change)
+    # 2) deck state + helpers: the offset from the active card is the only input
+    #    the CSS needs, so React owns the index and nothing else.
     old_nav = "  const navigate = useNavigate();"
     assert old_nav in text, "navigate declaration not found"
-    text = text.replace(
-        old_nav,
-        old_nav
-        + "\n  const [swiper, setSwiper] = useState<SwiperClass | null>(null);"
-        + "\n  const [activeProject, setActiveProject] = useState(0);"
-        + "\n  const [slideCount, setSlideCount] = useState(3);",
-    )
+    text = text.replace(old_nav, old_nav + """
+  const [activeProject, setActiveProject] = useState(0);
+  // The deck has no translating track: every card is positioned purely by its
+  // offset from the active index (0 = front, +/-1 = one behind, +/-2 = two behind).
+  const deckOffset = (index: number) => index - activeProject;
+  const moveProject = (delta: number) =>
+    setActiveProject((current) => (current + delta + PROJECT_COUNT) % PROJECT_COUNT);
+  const deckCardProps = (index: number): HTMLAttributes<HTMLDivElement> => {
+    const offset = index - activeProject;
+    if (offset === 0) return {};
+    if (Math.abs(offset) > 2) return { inert: true, 'aria-hidden': true };
+    // A card behind the active one is hidden from assistive tech, so the wrapper
+    // is the control that brings it forward.
+    return {
+      role: 'button',
+      tabIndex: 0,
+      'aria-label': `Show ${PROJECT_TITLES[index]}`,
+      onClick: () => setActiveProject(index),
+    };
+  };
+  const onDeckKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      moveProject(1);
+    } else if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      moveProject(-1);
+    }
+  };
+  const dragFrom = useRef<number | null>(null);
+  const dragged = useRef(false);
+  const onDeckPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    dragFrom.current = event.clientX;
+    dragged.current = false;
+  };
+  const onDeckPointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    const start = dragFrom.current;
+    dragFrom.current = null;
+    if (start === null) return;
+    const delta = event.clientX - start;
+    if (Math.abs(delta) >= 45) {
+      // a swipe must not turn into a click on whatever card the finger left on
+      dragged.current = true;
+      moveProject(delta < 0 ? 1 : -1);
+    }
+  };
+  const onDeckClickCapture = (event: MouseEvent<HTMLDivElement>) => {
+    if (!dragged.current) return;
+    dragged.current = false;
+    event.preventDefault();
+    event.stopPropagation();
+  };""")
 
     # 3) accessible names below sm: the visible labels hide on small screens, so
     #    LinkedIn/Contact need aria-labels like the GitHub link already has.
@@ -460,14 +492,13 @@ def edit(source: Path, out_dir: Path) -> Path:
     assert rag_links == 2, f"expected 2 RAG card links, found {rag_links}"
     text = text.replace("navigate('/rag-overview')", "navigate('/projects/rag-workbench')")
 
-    # 5) grid -> carousel shell (outer > Swiper > slide 1 > render prop)
+    # 5) grid -> the deck (one grid cell per card) + slide/card wrapper
     old_grid = '          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.12fr)_minmax(280px,0.88fr)] gap-5 lg:gap-6 max-w-5xl">'
     assert old_grid in text, "projects grid not found"
     text = text.replace(old_grid, CAROUSEL_OPEN)
 
-    # 5b) the first card is a slide now: it is interactive only while active, so
-    #     its clipped state is inert and untabbable (same treatment as the Haze
-    #     card below). This is the accessibility fix the Swiper migration brings.
+    # 5b) the cards are only interactive while they are in front, so a hidden card
+    #     can be neither tabbed into nor activated (aria-hidden + inert).
     rag_tag_old = (
         "              onClick={() => navigate('/projects/rag-workbench')}\n"
         "              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/projects/rag-workbench'))}\n"
@@ -478,9 +509,9 @@ def edit(source: Path, out_dir: Path) -> Path:
         "              onClick={() => navigate('/projects/rag-workbench')}\n"
         "              onKeyDown={(event) => activateCardOnKeyDown(event, () => navigate('/projects/rag-workbench'))}\n"
         '              role="button"\n'
-        "              tabIndex={isActive ? 0 : -1}\n"
-        "              aria-hidden={!isActive}\n"
-        "              inert={!isActive}"
+        "              tabIndex={activeProject === 0 ? 0 : -1}\n"
+        "              aria-hidden={activeProject !== 0}\n"
+        "              inert={activeProject !== 0}"
     )
     assert rag_tag_old in text, "RAG card tag not found"
     text = text.replace(rag_tag_old, rag_tag_new)
@@ -500,7 +531,8 @@ def edit(source: Path, out_dir: Path) -> Path:
     assert end != -1, "Enterprise card end not found"
     text = text[:start] + CARD + "\n" + text[end + len("\n            </div>\n") :]
 
-    # 8) close the carousel after the second card and add the controls
+    # 8) close the second card's wrapper, emit the third card, close the deck and
+    #    add the controls
     tail_old = "            </div>\n          </div>\n        </section>"
     cta = text.find("                  View case study")
     assert cta != -1, "Haze card CTA not found"
@@ -527,11 +559,10 @@ def edit(source: Path, out_dir: Path) -> Path:
     print(f"Quant Platform cards: {text.count('Point-in-time equity research on Databricks')}")
     print(f"Enterprise cards left: {text.count('Market data architecture notes')}")
     print(
-        "carousel markers: "
-        f"SwiperSlide={text.count('<SwiperSlide>')}, "
+        "deck markers: "
+        f"deckCards={text.count('haze-deck-card')}, "
         f"dots={text.count('Show project')}, "
-        f"inert={text.count('inert={!isActive}')}, "
-        f"arrowKeys={text.count('.haze-proj-next')}"
+        f"inert={text.count('inert={activeProject !== ')}"
     )
     return out_dir / "PortfolioHome.tsx"
 
