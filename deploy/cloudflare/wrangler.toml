@@ -2,23 +2,27 @@ name = "haze-watch-route"
 main = "worker.js"
 compatibility_date = "2026-10-01"
 
-# Only requests under /haze-watch hit this Worker; everything else on the domain
-# is served by the existing origin, untouched.
+# Only API paths hit this Worker; everything else on the domain (including
+# non-API /haze-watch/* — the SPA pages/assets) is served by evangoh-frontend
+# directly, untouched. evangoh-frontend bundles its own copy of the Haze
+# Watch app (imported in Phase 1 of the frontend split), so once this Worker
+# stopped claiming the whole /haze-watch* prefix, that copy is what actually
+# serves those pages in production.
 #
 # www first: www.evangoh.com is the canonical host, and it is the one the site
 # links to (APP_URL in the portfolio's HazeWatch.tsx). The apex evangoh.com
 # returns a 522 on the Cloudflare->origin leg over HTTPS on every path (the
 # origin route for the apex is broken; www reaches the same origin in ~0.3s),
-# so the app must not be advertised at the bare apex. The apex route below is
-# kept so /haze-watch also works there once that origin route is fixed; note
-# that a scheme-matching apex->www Redirect Rule would shadow this Worker,
-# because redirect rules run before Workers.
+# so the app must not be advertised at the bare apex. The apex routes below
+# are kept so these paths also work there once that origin route is fixed;
+# note that a scheme-matching apex->www Redirect Rule would shadow this
+# Worker, because redirect rules run before Workers.
 #
 # The zone must already be on Cloudflare (evangoh.com is) and the hostnames
 # proxied, which they are.
 routes = [
-  { pattern = "www.evangoh.com/haze-watch*", zone_name = "evangoh.com" },
-  { pattern = "evangoh.com/haze-watch*", zone_name = "evangoh.com" },
+  { pattern = "www.evangoh.com/haze-watch/api*", zone_name = "evangoh.com" },
+  { pattern = "evangoh.com/haze-watch/api*", zone_name = "evangoh.com" },
   { pattern = "www.evangoh.com/api*", zone_name = "evangoh.com" },
   { pattern = "evangoh.com/api*", zone_name = "evangoh.com" }
 ]
