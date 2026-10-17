@@ -18,5 +18,7 @@ compatibility_date = "2026-10-01"
 # proxied, which they are.
 routes = [
   { pattern = "www.evangoh.com/haze-watch*", zone_name = "evangoh.com" },
-  { pattern = "evangoh.com/haze-watch*", zone_name = "evangoh.com" }
+  { pattern = "evangoh.com/haze-watch*", zone_name = "evangoh.com" },
+  { pattern = "www.evangoh.com/api*", zone_name = "evangoh.com" },
+  { pattern = "evangoh.com/api*", zone_name = "evangoh.com" }
 ]
