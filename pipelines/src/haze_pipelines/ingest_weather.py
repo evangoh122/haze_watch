@@ -7,12 +7,14 @@ observation day (conservative reanalysis latency) for point-in-time correctness.
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import httpx
 import pandas as pd
 
 from .config import Settings, settings
+from .geo import INDONESIA_BBOX
 from .io import write_parquet
 
 DAILY_VARS = [
@@ -35,6 +37,43 @@ CANONICAL_COLUMNS = [
 ]
 
 
+def _coord_label(value: float, positive: str, negative: str) -> str:
+    return f"{abs(value):.0f}{positive if value >= 0 else negative}"
+
+
+def grid_stations(
+    bbox: tuple[float, float, float, float] = INDONESIA_BBOX,
+    grid: int = 6,
+) -> list[dict]:
+    """Build a regular ERA5 point grid as station rows.
+
+    ERA5 is a reanalysis grid, not a station network. A regular grid gives every
+    concession an auditable nearest point instead of stretching four distant
+    stations across the archipelago (the old demo used one station for 207 km to
+    824 km away). ``grid`` is the number of points per axis, inclusive.
+    """
+    if grid < 2:
+        raise ValueError("grid must be >= 2")
+    min_lon, min_lat, max_lon, max_lat = bbox
+    lons = [min_lon + i * (max_lon - min_lon) / (grid - 1) for i in range(grid)]
+    lats = [min_lat + i * (max_lat - min_lat) / (grid - 1) for i in range(grid)]
+    stations: list[dict] = []
+    for lat in lats:
+        for lon in lons:
+            station_id = (
+                f"ERA5-{_coord_label(lon, 'E', 'W')}-{_coord_label(lat, 'N', 'S')}"
+            )
+            stations.append(
+                {
+                    "station_id": station_id,
+                    "label": f"ERA5 grid point {lat:.2f},{lon:.2f}",
+                    "latitude": lat,
+                    "longitude": lon,
+                }
+            )
+    return stations
+
+
 def fetch_station_daily(
     latitude: float,
     longitude: float,
@@ -43,8 +82,15 @@ def fetch_station_daily(
     *,
     base_url: str | None = None,
     client: httpx.Client | None = None,
+    max_retries: int = 5,
+    retry_wait_seconds: float = 60.0,
 ) -> dict:
-    """Fetch daily reanalysis values for one point. Returns the raw JSON payload."""
+    """Fetch daily reanalysis values for one point. Returns the raw JSON payload.
+
+    Long archive requests are metered by Open-Meteo's minutely quota. A 429 is a
+    wait-and-retry signal, not a permanent failure; the caller also paces between
+    stations.
+    """
     params = {
         "latitude": latitude,
         "longitude": longitude,
@@ -54,11 +100,18 @@ def fetch_station_daily(
         "timezone": "UTC",
     }
     own_client = client is None
-    client = client or httpx.Client(timeout=60.0)
+    client = client or httpx.Client(timeout=120.0)
     try:
-        response = client.get(base_url or settings.open_meteo_archive_url, params=params)
-        response.raise_for_status()
-        return response.json()
+        for attempt in range(max_retries + 1):
+            response = client.get(
+                base_url or settings.open_meteo_archive_url, params=params, timeout=120.0
+            )
+            if getattr(response, "status_code", 200) == 429 and attempt < max_retries:
+                time.sleep(retry_wait_seconds)
+                continue
+            response.raise_for_status()
+            return response.json()
+        raise RuntimeError("unreachable: weather retry loop exhausted")
     finally:
         if own_client:
             client.close()
@@ -107,13 +160,30 @@ def ingest_stations(
     *,
     settings_obj: Settings = settings,
     client: httpx.Client | None = None,
+    pause_seconds: float = 0.0,
+    max_retries: int = 5,
+    checkpoint_dir: Path | None = None,
 ) -> tuple[pd.DataFrame, Path]:
     """Fetch and normalize daily weather for a list of stations.
 
     Each station dict: ``{"station_id", "label", "latitude", "longitude"}``.
+    With ``checkpoint_dir``, each completed station is written independently and
+    skipped on a rerun, so a quota failure costs one station rather than the run.
     """
+    if checkpoint_dir is not None:
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
     frames = []
-    for station in stations:
+    for index, station in enumerate(stations):
+        checkpoint_path = (
+            checkpoint_dir / f"{station['station_id']}.parquet"
+            if checkpoint_dir is not None
+            else None
+        )
+        if checkpoint_path is not None and checkpoint_path.exists():
+            frames.append(pd.read_parquet(checkpoint_path))
+            continue
+
         payload = fetch_station_daily(
             station["latitude"],
             station["longitude"],
@@ -121,8 +191,22 @@ def ingest_stations(
             end_date,
             base_url=settings_obj.open_meteo_archive_url,
             client=client,
+            max_retries=max_retries,
         )
-        frames.append(normalize_station_payload(payload, station["station_id"]))
+        frame = normalize_station_payload(
+            payload,
+            station["station_id"],
+            availability_lag_hours=settings_obj.weather_availability_lag_hours,
+        )
+        if checkpoint_path is not None:
+            write_parquet(
+                frame,
+                checkpoint_path,
+                extra_metadata={"dataset": "weather_observations_partial"},
+            )
+        frames.append(frame)
+        if index < len(stations) - 1 and pause_seconds > 0:
+            time.sleep(pause_seconds)
 
     df = (
         pd.concat(frames, ignore_index=True)

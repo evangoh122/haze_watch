@@ -46,6 +46,42 @@ WEATHER = pd.DataFrame(
 )
 
 
+def _aerosol_row(
+    grid_id: str,
+    lat: float,
+    lon: float,
+    date: str,
+    available: str,
+    aod: float,
+    pm25: float,
+    pm10: float,
+) -> dict:
+    return {
+        "grid_id": grid_id,
+        "latitude": lat,
+        "longitude": lon,
+        "date": pd.Timestamp(date, tz="UTC"),
+        "available_time": pd.Timestamp(available, tz="UTC"),
+        "aerosol_optical_depth_mean": aod,
+        "aerosol_optical_depth_max": aod * 2,
+        "pm2_5_mean": pm25,
+        "pm10_mean": pm10,
+        "is_fixture": False,
+        "source": "CAMS_via_OpenMeteo",
+    }
+
+
+AEROSOL = pd.DataFrame(
+    [
+        _aerosol_row("CAMS-NEAR", -2.0, 113.0, "2026-01-01", "2026-01-02", 0.4, 20.0, 30.0),
+        _aerosol_row("CAMS-NEAR", -2.0, 113.0, "2026-01-02", "2026-01-03", 0.6, 40.0, 60.0),
+        _aerosol_row("CAMS-FAR", 5.0, 120.0, "2026-01-02", "2026-01-03", 9.9, 999.0, 999.0),
+        # Future observation must never leak into an earlier as_of.
+        _aerosol_row("CAMS-NEAR", -2.0, 113.0, "2026-01-10", "2026-01-11", 5.0, 500.0, 500.0),
+    ]
+)
+
+
 def test_features_count_only_data_available_at_as_of():
     raw = fixture_hotspots(n=8, start=pd.Timestamp("2026-01-01", tz="UTC").to_pydatetime())
 
@@ -89,6 +125,12 @@ def test_feature_schema_is_stable():
         "wind_max_7d_ms",
         "weather_station_id",
         "weather_distance_km",
+        "aerosol_optical_depth_mean_7d",
+        "aerosol_optical_depth_max_7d",
+        "pm2_5_mean_7d",
+        "pm10_mean_7d",
+        "haze_grid_id",
+        "haze_distance_km",
     ]
 
 
@@ -160,3 +202,37 @@ def test_weather_comes_from_nearest_station_only():
     assert not (by_id["temp_max_7d_c"] == 33.0).any()
     # Distances are recorded for auditability.
     assert by_id["weather_distance_km"].notna().all()
+
+
+def test_haze_comes_from_nearest_grid_point_and_respects_availability():
+    """CAMS rows are filtered on available_time and joined to the nearest point."""
+    raw = normalize_firms(
+        fixture_hotspots(n=2), source="FIXTURE", available_lag_hours=0.0, is_fixture=True
+    )
+    # as_of 2026-01-03: only the two Jan-1/Jan-2 rows are available (Jan-10 is not).
+    feats = build_features(
+        POLYGONS, raw, WEATHER, pd.Timestamp("2026-01-03", tz="UTC"), aerosol=AEROSOL
+    )
+    first = feats.iloc[0]
+
+    assert first["haze_grid_id"] == "CAMS-NEAR"
+    assert first["haze_distance_km"] < 10.0
+    assert first["aerosol_optical_depth_mean_7d"] == 0.5  # mean(0.4, 0.6)
+    assert first["aerosol_optical_depth_max_7d"] == 1.2  # max(0.8, 1.2)
+    assert first["pm2_5_mean_7d"] == 30.0
+    assert first["pm10_mean_7d"] == 45.0
+
+
+def test_haze_is_empty_when_no_observation_is_available_yet():
+    raw = normalize_firms(
+        fixture_hotspots(n=2), source="FIXTURE", available_lag_hours=0.0, is_fixture=True
+    )
+    feats = build_features(
+        POLYGONS, raw, WEATHER, pd.Timestamp("2026-01-01", tz="UTC"), aerosol=AEROSOL
+    )
+    first = feats.iloc[0]
+
+    # Nothing was public yet, so no grid point or value is borrowed.
+    assert first["haze_grid_id"] is None
+    assert pd.isna(first["aerosol_optical_depth_mean_7d"])
+    assert pd.isna(first["pm2_5_mean_7d"])

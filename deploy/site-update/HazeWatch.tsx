@@ -71,12 +71,13 @@ export default function HazeWatch() {
               Twenty-five years of fire, mapped to borrower cash flow.
             </h1>
             <p className="text-secondary text-base leading-8 font-light mt-7 max-w-3xl text-pretty">
-              Haze Watch joins real NASA fire observations and reanalysis weather to concession
-              geography, then runs auditable credit stress scenarios over the same numbers a credit
-              memo would cite. The 25-year detection record (MODIS since 2000, VIIRS since 2012)
-              is assembled: 9.6M detections in a versioned GeoParquet store, per sensor and year.
-              The weather and peat panels join it next, so the hazard-to-cash-flow link can be
-              studied across the big El Niño fire years - 2015, 2019, 2023-24.
+              Haze Watch joins real NASA fire observations, reanalysis weather and CAMS haze
+              indicators to concession geography, then runs auditable credit stress scenarios over
+              the same numbers a credit memo would cite. The 25-year detection record (MODIS since
+              2000, VIIRS since 2012) is assembled: 9.6M detections in a versioned GeoParquet store,
+              per sensor and year. The weather and haze panels now join it - 1981-2026
+              reanalysis weather and the full CAMS archive from 2022 - so the hazard-to-cash-flow
+              link can be studied across the big El Niño fire years: 2015, 2019 and 2023-24.
             </p>
             <div className="flex flex-wrap gap-4 mt-8">
               <a
@@ -111,7 +112,7 @@ export default function HazeWatch() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl border border-accent/15 bg-accent/8 p-3">
-                  <div className="text-[10px] text-accent-bright font-mono mb-3">weather 1940 -&gt;</div>
+                  <div className="text-[10px] text-accent-bright font-mono mb-3">weather 1981 -&gt;</div>
                   <div className="h-8 rounded bg-background/50" />
                 </div>
                 <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-3">
@@ -122,7 +123,7 @@ export default function HazeWatch() {
               <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-3">
                 <div className="flex items-center justify-between text-[10px] font-mono text-secondary">
                   <span>archive status</span>
-                  <span className="text-amber-500">backfilling</span>
+                  <span className="text-emerald-400">weather + haze backfilled</span>
                 </div>
               </div>
             </div>
@@ -133,13 +134,15 @@ export default function HazeWatch() {
           <div className="flex items-center gap-3 mb-3">
             <span className="editorial-rule" />
             <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-primary m-0">
-              Historical data - in progress.
+              Historical data - weather and haze backfilled.
             </h2>
           </div>
           <p className="text-secondary text-base leading-8 font-light max-w-3xl mb-8">
-            The record is the foundation: the full detection history now sits in a versioned
-            GeoParquet store (per sensor, per year, deduplicated), so every later claim
-            rests on the same evidence. Sources and their true depths:
+            The record is the foundation: the full detection history, the 1981-2026
+            reanalysis weather panel and the 2022+ haze panel now sit in versioned,
+            provenance-registered stores. Each concession is joined to its nearest weather
+            and haze point, so every later claim rests on the same evidence. Sources and
+            their true depths:
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -161,37 +164,45 @@ export default function HazeWatch() {
             <div className="glass-card rounded-2xl p-5">
               <div className="flex items-center justify-between mb-3">
                 <Wind size={15} className="text-accent-bright" />
-                <span className="text-[9px] font-mono text-secondary/60 border border-border/60 rounded-full px-2 py-0.5">panel next</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent/8 px-2 py-0.5 text-[9px] font-mono text-accent-bright">
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+                  panel complete
+                </span>
               </div>
-              <h4 className="text-sm font-semibold text-primary mb-2">Weather (ERA5 reanalysis)</h4>
+              <h4 className="text-sm font-semibold text-primary mb-2">Weather (reanalysis)</h4>
               <p className="text-[11px] text-secondary/80 leading-relaxed m-0">
-                ERA5 reanalysis reaches back to 1940 (via Open-Meteo) - deep enough for every
-                modern El Niño drought episode. The project's daily weather panel over that span
-                is the next build step.
+                Daily reanalysis weather from 1981 to 2026 on a 5-point coverage set over
+                the concession region: 83,625 station-days. Every concession has a coverage
+                point within 158 km. The delivered panel is NASA POWER/MERRA-2, a labelled
+                fallback; ERA5 via Open-Meteo remains the primary ingest path.
               </p>
             </div>
             <div className="glass-card rounded-2xl p-5">
               <div className="flex items-center justify-between mb-3">
                 <Database size={15} className="text-accent-bright" />
-                <span className="text-[9px] font-mono text-secondary/60 border border-border/60 rounded-full px-2 py-0.5">partial depth</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/8 px-2 py-0.5 text-[9px] font-mono text-emerald-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  2022+ archive
+                </span>
               </div>
               <h4 className="text-sm font-semibold text-primary mb-2">Haze indicators (CAMS aerosol)</h4>
               <p className="text-[11px] text-secondary/80 leading-relaxed m-0">
-                Aerosol optical depth and particulate matter from 2022 onward via the current route;
-                deeper haze history (OMPS Aerosol Index 2012+, MODIS MAIAC AOD 2000+) needs NASA
-                Earthdata credentials and is queued behind the fire backfill.
+                Aerosol optical depth and particulate matter from 2022-08-31 on a 121-point
+                1-degree grid: 182,710 point-days, all concessions within 75 km. Deeper haze
+                history (OMPS Aerosol Index 2012+, MODIS MAIAC AOD 2000+) still needs NASA
+                Earthdata, so 2015 and 2019 haze remain the one covariate gap.
               </p>
             </div>
             <div className="glass-card rounded-2xl p-5">
               <div className="flex items-center justify-between mb-3">
                 <AlertTriangle size={15} className="text-accent-bright" />
-                <span className="text-[9px] font-mono text-secondary/60 border border-border/60 rounded-full px-2 py-0.5">study design</span>
+                <span className="text-[9px] font-mono text-secondary/60 border border-border/60 rounded-full px-2 py-0.5">covariates ready</span>
               </div>
               <h4 className="text-sm font-semibold text-primary mb-2">Event years in scope</h4>
               <p className="text-[11px] text-secondary/80 leading-relaxed m-0">
-                The 2015, 2019 and 2023-24 El Niño fire seasons are the anchor events for the
-                financial-impact study that follows the backfill - hazard panels first, borrower
-                modelling second.
+                The 2015, 2019 and 2023-24 El Niño fire seasons are the anchor events. Fire and
+                weather cover all three; haze covers 2023-24. The remaining work is the event
+                study and the borrower join, not another backfill of the core panels.
               </p>
             </div>
           </div>
@@ -202,11 +213,12 @@ export default function HazeWatch() {
               work in progress
             </div>
             <p className="text-xs text-secondary/80 leading-relaxed m-0">
-              The fire archive is complete: 9.6M detections, 2000-2026, per sensor and year.
-              What is still in progress is everything built on top of it - the daily weather
-              panel, peat/land-cover covariates, and the financial join. Figures elsewhere on
-              this page - 300 real concession polygons, 24-72h hazard horizons - reflect the
-              sample run the live app serves, not the full archive.
+              The core panels are backfilled: 9.6M fire detections (2000-2026), 83,625
+              reanalysis station-days (1981-2026) and 182,710 CAMS haze point-days (2022+).
+              What is still in progress is everything built on top of them - peat/land-cover
+              covariates, the event study and the financial join. Figures elsewhere on this
+              page - 300 real concession polygons, 24-72h hazard horizons - reflect the
+              sample run the live app serves, not a finished credit model.
             </p>
           </div>
         </section>

@@ -1,6 +1,6 @@
 # Data Pipeline
 
-> Status: **implemented and tested** (36 unit/integration tests passing). Forecasting
+> Status: **implemented and tested** (84 unit/integration tests passing). Forecasting
 > is a labeled baseline; ML models arrive in Phase 2.
 
 Package: `pipelines/` (installable as `haze-pipelines`, uv workspace member).
@@ -14,6 +14,8 @@ NASA FIRMS CSV exports ─┐
 (make-fixture-hotspots) ┘   [fixture flag]           │
                                                      │
 Open-Meteo / ERA5 ────────> ingest-weather ──────────┤
+NASA POWER / MERRA-2 ─────> ingest-power (fallback) ─┤
+CAMS / Open-Meteo ────────> ingest-aerosol ──────────┤
                                                      ├─> build-features ─> run-forecast
 BNPB / GFW ArcGIS ────────> fetch-concessions ──┐    │   (point-in-time)    (baseline)
 local GeoJSON/GeoPackage ─> ingest-polygons ────┴────┴─> run-exposure
@@ -42,22 +44,34 @@ uv run haze-pipelines ingest-firms --from-api --days 3 --out data/processed/fire
 uv run haze-pipelines ingest-firms --from-api --start-date 2015-06-01 --backfill-days 120 \
   --sensor VIIRS_SNPP_NRT --out data/processed/fire_hotspots.parquet
 # 2b. Haze/aerosol indicators (CAMS via Open-Meteo) - FIRMS is fire, NOT haze.
-# NOTE: this route's archive starts 2022-08-31; deeper haze history needs NASA
-# Earthdata (OMPS Aerosol Index 2012+ / MODIS MAIAC AOD 2000+).
-uv run haze-pipelines ingest-aerosol --start 2023-01-01 --end 2023-03-31 --grid 3
+# Full available archive: 2022-08-31 onward. A 1-degree grid over the concession
+# region gives every polygon a grid point within ~75 km.
+uv run haze-pipelines ingest-aerosol --bbox 110,-4,120,6 --grid 11 \
+    --start 2022-08-31 --end 2026-10-18 --out data/processed/haze_aerosol.parquet
+# NOTE: deeper haze history (2015/2019 events) needs NASA Earthdata:
+# OMPS Aerosol Index 2012+ / MODIS MAIAC AOD 2000+.
 uv run haze-pipelines ingest-firms --from-api --area 95,-6,120,6 --sensor VIIRS_SNPP_NRT \
     --out data/processed/fire_hotspots.parquet
 uv run haze-pipelines ingest-firms --input data/raw/firms --out data/processed/fire_hotspots.parquet
 uv run haze-pipelines make-fixture-hotspots --out-dir data/raw/firms --n 40 --center 116.2,-2.2
 uv run haze-pipelines ingest-firms --input data/raw/firms --fixture --out data/processed/fire_hotspots.parquet
 
-# 3. Weather (real, public API)
-uv run haze-pipelines ingest-weather --stations data/raw/stations.csv \
-    --start 2026-01-01 --end 2026-01-31 --out data/processed/weather.parquet
+# 3. Weather (real, public API). The coverage set is k-means over the concession
+# representative points, so five points cover all 300 polygons inside the 300 km
+# feature limit. NASA POWER/MERRA-2 is the quota-resilient fallback; the ERA5
+# path is `ingest-weather` and remains the primary source when quota allows.
+uv run python scripts/make_coverage_stations.py \
+    --polygons data/processed/plantation_polygons.parquet --k 5 \
+    --out data/raw/weather/coverage_5.csv
+uv run haze-pipelines ingest-power --stations data/raw/weather/coverage_5.csv \
+    --start 1981-01-01 --end 2026-10-17 --pause 1 --retries 5 \
+    --checkpoint-dir data/interim/weather_partial \
+    --out data/processed/weather.parquet
 
-# 4. Derived datasets (spatial: nearest weather station per polygon, hotspot
-#    distances to polygon boundary, not centroid)
-uv run haze-pipelines build-features --weather data/processed/weather.parquet --as-of 2026-02-01T00:00:00Z
+# 4. Derived datasets (spatial: nearest weather/haze point per polygon,
+#    hotspot distances to polygon boundary, not centroid)
+uv run haze-pipelines build-features --weather data/processed/weather.parquet \
+    --aerosol data/processed/haze_aerosol.parquet --as-of 2026-02-01T00:00:00Z
 uv run haze-pipelines run-exposure --as-of 2026-02-01T00:00:00Z
 uv run haze-pipelines run-forecast --features data/processed/environmental_features.parquet
 
@@ -98,14 +112,15 @@ Caveats (this build of the extension):
   `geopandas.GeoSeries.from_wkt`. Files written by GeoPandas in true GeoParquet
   format are also readable (geometry arrives as WKB: `st_geomfromwkb`).
 
-## The four connected datasets (MVP)
+## The five connected datasets (MVP)
 
 | Dataset | Command | Treatment |
 |---|---|---|
 | `plantation_polygons` | `ingest-polygons` / `fetch-concessions` | `real-restricted` |
 | `fire_observations` | `ingest-firms` | `real` or `synthetic-fixture` |
+| `weather_observations` | `ingest-weather` / `ingest-power` | `real` (ERA5 via Open-Meteo primary; NASA POWER/MERRA-2 fallback, 1981+) |
 | `haze_aerosol` | `ingest-aerosol` | `real` (CAMS via Open-Meteo; archive from 2022-08-31) |
-| `environmental_features` | `build-features` | `real` (derived) |
+| `environmental_features` | `build-features` | `real` (derived; weather + haze joins) |
 | `synthetic_financial_exposures` | `synthetic/` engine (next) | `synthetic` |
 
 ## Governance rules enforced in code
@@ -216,24 +231,39 @@ runs (see docs/llm.md).
   the forecast is a labeled deterministic baseline (0-1 hazard score), not a
   calibrated probability or a PD.
 
-## Current end-to-end result (2026-02-01 run)
+## Current environmental panels (backfilled 2026-10-19)
 
 - 300 real concession polygons (BNPB/GFW mirror, quality gates passed)
-- 124 real station-days of weather (Open-Meteo/ERA5)
-- 40 labeled fixture detections → 5 polygons with detections
-- 300 feature rows, 900 baseline forecast rows
-- All outputs registered in `data/metadata/registry.json`
+- 5 real NASA POWER/MERRA-2 coverage points x 16,725 days = 83,625 station-days (1981-2026)
+- 121 real CAMS grid points x 1,510 days = 182,710 point-days (2022-08-31 to 2026-10-18)
+- All 300 concessions are within 158 km of a weather coverage point and 75 km of
+  a haze grid point (both inside the configured distance limits)
+- Feature builder joins both panels with `available_time <= as_of`; haze is
+  lagged 72h and weather 48h, so no future data leaks in
+- The fixture end-to-end run still produces 300 feature rows and 900 baseline
+  forecast rows; all outputs are registered in `data/metadata/registry.json`
 
-## Not yet implemented
+## Operating notes and remaining gaps
 
 - FIRMS API live fetch (`ingest-firms --from-api`) is wired, unit-tested against a
   stubbed client, **and** exercised against the live API - the 2000-2026 history
   archive in the HF dataset was built with it. The area API caps a request at 5 days
   (`MAX_DAYS_PER_REQUEST`), so longer spans are looped, and the MAP_KEY quota wall is
   ~500 requests / 10 min (see the operating notes above).
+- Weather and haze archive requests are metered by Open-Meteo's hourly quota. A
+  full-depth ERA5 sweep can exhaust it; `ingest-power` is the fallback and uses
+  NASA POWER/MERRA-2, which has much looser limits and is clearly labelled in
+  provenance. Both weather ingesters support `--pause`, `--retries` 429 backoff
+  and `--checkpoint-dir` so a late failure resumes instead of refetching
+  completed stations. MERRA-2 is not ERA5; do not describe the fallback panel as
+  ERA5.
+- Pre-2022 haze requires NASA Earthdata (OMPS Aerosol Index 2012+ / MODIS MAIAC AOD
+  2000+). CAMS via Open-Meteo only starts 2022-08-31, so the 2015 and 2019 haze
+  covariates remain unavailable; fire and weather cover those years.
 - MapBiomas land-cover and peatland ingestion (`gfw-peatlands` source is wired but
   the WRI query endpoint was returning HTTP 500 at last check)
 - Scheduled execution: `.github/workflows/firms-ingest.yml` pulls daily and uploads the
   parquet as an artifact (requires the `FIRMS_API_KEY` repo secret; it skips cleanly
   when the secret is absent). Writing scheduled output into a database is Phase 5.
 - Burned-area estimation from imagery — Phase 3
+

@@ -1,4 +1,4 @@
-.PHONY: setup up down test lint ingest-firms ingest-firms-api ingest-weather
+.PHONY: setup up down test lint ingest-firms ingest-firms-api ingest-weather coverage-stations ingest-weather-full ingest-haze
 
 setup:
 	uv sync --all-packages
@@ -34,6 +34,28 @@ ingest-firms-api:
 
 ingest-weather:
 	uv run haze-pipelines ingest-weather --stations data/raw/stations.csv --start $(START) --end $(END) --out data/processed/weather.parquet
+
+# Full-depth panels over the concession region (110-120E, 4S-6N).
+WEATHER_START ?= 1981-01-01
+WEATHER_END ?= 2026-10-17
+HAZE_START ?= 2022-08-31
+HAZE_END ?= 2026-10-18
+
+coverage-stations:
+	uv run python scripts/make_coverage_stations.py \
+		--polygons data/processed/plantation_polygons.parquet \
+		--k 5 --out data/raw/weather/coverage_5.csv
+
+ingest-weather-full:
+	uv run haze-pipelines ingest-power --stations data/raw/weather/coverage_5.csv \
+		--start $(WEATHER_START) --end $(WEATHER_END) --pause 1 --retries 5 \
+		--checkpoint-dir data/interim/weather_partial \
+		--out data/processed/weather.parquet
+
+ingest-haze:
+	uv run haze-pipelines ingest-aerosol --bbox 110,-4,120,6 --grid 11 \
+		--start $(HAZE_START) --end $(HAZE_END) --pause 1 --retries 5 \
+		--out data/processed/haze_aerosol.parquet
 
 # Synthetic financial engine is not implemented yet; `synthetic/` contains
 # stubs and skipped placeholder tests only. See README status table.

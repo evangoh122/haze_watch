@@ -10,6 +10,8 @@ Spatial rules:
   nearest boundary point), not to the centroid.
 - Weather comes from the **nearest station** to the polygon only; the station id
   and distance are recorded so every value is auditable.
+- Haze/aerosol comes from the **nearest CAMS grid point** only. It is a separate
+  atmospheric product: AOD/PM are not fire detections and not burned area.
 """
 
 from __future__ import annotations
@@ -39,6 +41,12 @@ FEATURE_COLUMNS = [
     "wind_max_7d_ms",
     "weather_station_id",
     "weather_distance_km",
+    "aerosol_optical_depth_mean_7d",
+    "aerosol_optical_depth_max_7d",
+    "pm2_5_mean_7d",
+    "pm10_mean_7d",
+    "haze_grid_id",
+    "haze_distance_km",
 ]
 
 
@@ -52,6 +60,8 @@ def build_features(
     hotspots: pd.DataFrame,
     weather: pd.DataFrame | None,
     as_of: str | datetime,
+    *,
+    aerosol: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Build leakage-safe features per polygon for a single ``as_of`` timestamp.
 
@@ -73,6 +83,27 @@ def build_features(
         wx = wx[wx["available_time"] <= as_of_ts]
         weather_rows = wx.to_dict("records")
     wx_df = pd.DataFrame(weather_rows)
+
+    aerosol_rows: list[dict] = []
+    if aerosol is not None and len(aerosol):
+        az = aerosol.copy()
+        az["date"] = pd.to_datetime(az["date"], utc=True)
+        if "available_time" in az.columns:
+            az["available_time"] = pd.to_datetime(az["available_time"], utc=True)
+        else:
+            az["available_time"] = az["date"] + pd.to_timedelta(
+                settings.haze_availability_lag_hours, unit="h"
+            )
+        if "grid_id" not in az.columns:
+            az["grid_id"] = (
+                "CAMS-"
+                + az["longitude"].map(lambda value: f"{value:.2f}")
+                + "_"
+                + az["latitude"].map(lambda value: f"{value:.2f}")
+            )
+        az = az[az["available_time"] <= as_of_ts]
+        aerosol_rows = az.to_dict("records")
+    az_df = pd.DataFrame(aerosol_rows)
 
     records: list[dict] = []
     for _, poly in polygons.iterrows():
@@ -126,6 +157,33 @@ def build_features(
                         humidity = float(wx7["humidity_mean_pct"].mean())
                         wind = float(wx7["wind_max_ms"].max())
 
+        # Haze from the nearest CAMS grid point only, within the defensible radius.
+        aod_mean = aod_max = pm25 = pm10 = np.nan
+        haze_id = None
+        haze_km = np.nan
+        if len(az_df):
+            points = az_df.drop_duplicates("grid_id")[["grid_id", "latitude", "longitude"]]
+            haze_dists = distances_to_geom_km(
+                geom,
+                points["longitude"].to_numpy(),
+                points["latitude"].to_numpy(),
+            )
+            if np.isfinite(haze_dists).any():
+                best_haze = int(np.argmin(haze_dists))
+                haze_id = str(points.iloc[best_haze]["grid_id"])
+                haze_km = float(haze_dists[best_haze])
+                if haze_km <= settings.haze_max_distance_km:
+                    az_point = az_df[az_df["grid_id"] == haze_id]
+                    az7 = az_point[
+                        (az_point["date"] > as_of_ts - pd.Timedelta(days=7))
+                        & (az_point["date"] <= as_of_ts)
+                    ]
+                    if len(az7):
+                        aod_mean = float(az7["aerosol_optical_depth_mean"].mean())
+                        aod_max = float(az7["aerosol_optical_depth_max"].max())
+                        pm25 = float(az7["pm2_5_mean"].mean())
+                        pm10 = float(az7["pm10_mean"].mean())
+
         records.append(
             {
                 "polygon_id": poly["polygon_id"],
@@ -141,6 +199,12 @@ def build_features(
                 "wind_max_7d_ms": wind,
                 "weather_station_id": station_id,
                 "weather_distance_km": station_km,
+                "aerosol_optical_depth_mean_7d": aod_mean,
+                "aerosol_optical_depth_max_7d": aod_max,
+                "pm2_5_mean_7d": pm25,
+                "pm10_mean_7d": pm10,
+                "haze_grid_id": haze_id,
+                "haze_distance_km": haze_km,
             }
         )
 
@@ -159,20 +223,29 @@ def build_and_save(
     weather_path,
     as_of: str | datetime,
     out_path,
+    *,
+    aerosol_path=None,
     settings_obj=settings,
 ) -> tuple[pd.DataFrame, object]:
     """Load processed datasets, build features, write Parquet and register provenance."""
     polygons = read_parquet(polygons_path)
     hotspots = read_parquet(hotspots_path)
     weather = read_parquet(weather_path) if weather_path else None
+    aerosol = read_parquet(aerosol_path) if aerosol_path else None
 
     as_of_ts = _parse_as_of(as_of)
-    features = build_features(polygons, hotspots, weather, as_of_ts)
+    features = build_features(polygons, hotspots, weather, as_of_ts, aerosol=aerosol)
 
-    treatment = derive_treatment(
+    inputs = [
         bool(hotspots["is_fixture"].any()) if "is_fixture" in hotspots.columns else None,
         *_polygon_treatments(polygons),
-    )
+    ]
+    if aerosol is not None and "is_fixture" in aerosol.columns:
+        inputs.insert(0, bool(aerosol["is_fixture"].any()))
+    treatment = derive_treatment(*inputs)
+    source_parts = [str(hotspots_path), str(weather_path), str(polygons_path)]
+    if aerosol_path:
+        source_parts.insert(2, str(aerosol_path))
     write_parquet(
         features,
         out_path,
@@ -183,12 +256,12 @@ def build_and_save(
         settings_obj.metadata_dir,
         dataset_id=f"environmental_features::{as_of_ts.date().isoformat()}",
         name="Environmental features (point-in-time)",
-        source=f"{hotspots_path} + {weather_path} + {polygons_path}",
+        source=" + ".join(source_parts),
         license="derived from registered inputs",
         treatment=treatment,
         path=out_path,
         row_count=len(features),
         observation_end=as_of_ts.isoformat(),
-        notes="Filter: available_time <= as_of (leakage-safe).",
+        notes="Filter: available_time <= as_of (leakage-safe); weather and haze use the nearest grid point.",
     )
     return features, out_path

@@ -30,6 +30,8 @@ HOURLY_VARS = ("aerosol_optical_depth", "pm2_5", "pm10")
 
 CANONICAL_COLUMNS = [
     "date",
+    "available_time",
+    "grid_id",
     "latitude",
     "longitude",
     "aerosol_optical_depth_mean",
@@ -54,7 +56,9 @@ def fetch_point_hourly(
     end: str,
     *,
     client: httpx.Client | None = None,
-    timeout: float = 60.0,
+    timeout: float = 120.0,
+    max_retries: int = 5,
+    retry_wait_seconds: float = 60.0,
 ) -> dict:
     """Fetch hourly aerosol/PM values for one point. Returns the raw JSON payload."""
     params = {
@@ -68,9 +72,16 @@ def fetch_point_hourly(
     own_client = client is None
     client = client or httpx.Client(timeout=timeout)
     try:
-        response = client.get(API_URL, params=params, timeout=timeout)
-        response.raise_for_status()
-        payload = response.json()
+        for attempt in range(max_retries + 1):
+            response = client.get(API_URL, params=params, timeout=timeout)
+            if getattr(response, "status_code", 200) == 429 and attempt < max_retries:
+                time.sleep(retry_wait_seconds)
+                continue
+            response.raise_for_status()
+            payload = response.json()
+            break
+        else:  # pragma: no cover - defensive; loop always breaks or raises
+            raise RuntimeError("unreachable: aerosol retry loop exhausted")
     finally:
         if own_client:
             client.close()
@@ -83,12 +94,19 @@ def normalize_payload(
     payload: dict,
     *,
     source: str = "CAMS_via_OpenMeteo",
+    availability_lag_hours: float | None = None,
 ) -> pd.DataFrame:
     """Aggregate hourly AOD/PM values to one row per day and grid point."""
     hourly = payload.get("hourly") or {}
     times = hourly.get("time") or []
     if not times:
         return pd.DataFrame(columns=CANONICAL_COLUMNS)
+
+    lag = (
+        availability_lag_hours
+        if availability_lag_hours is not None
+        else settings.haze_availability_lag_hours
+    )
 
     def series(name: str) -> pd.Series:
         raw = pd.Series(hourly.get(name) or [], dtype="float64")
@@ -113,6 +131,15 @@ def normalize_payload(
             pm2_5_mean=("pm2_5", "mean"),
             pm10_mean=("pm10", "mean"),
         )
+    )
+    daily["available_time"] = pd.to_datetime(daily["date"], utc=True) + pd.to_timedelta(
+        lag, unit="h"
+    )
+    daily["grid_id"] = (
+        "CAMS-"
+        + daily["longitude"].map(lambda value: f"{value:.2f}")
+        + "_"
+        + daily["latitude"].map(lambda value: f"{value:.2f}")
     )
     daily["is_fixture"] = False
     daily["source"] = source
@@ -141,6 +168,8 @@ def ingest_grid(
     settings_obj: Settings = settings,
     client: httpx.Client | None = None,
     sleep=time.sleep,
+    pause_seconds: float = 1.0,
+    max_retries: int = 5,
 ) -> tuple[pd.DataFrame, Path]:
     """Fetch and normalize daily aerosol/PM values for a list of points.
 
@@ -149,12 +178,22 @@ def ingest_grid(
     """
     frames: list[pd.DataFrame] = []
     for index, (lat, lon) in enumerate(points):
-        payload = fetch_point_hourly(lat, lon, start, end, client=client)
-        frames.append(normalize_payload(payload))
-        if index < len(points) - 1 and sleep is not None:
-            sleep(0.2)
+        payload = fetch_point_hourly(
+            lat, lon, start, end, client=client, max_retries=max_retries
+        )
+        frames.append(
+            normalize_payload(
+                payload,
+                availability_lag_hours=settings_obj.haze_availability_lag_hours,
+            )
+        )
+        if index < len(points) - 1 and sleep is not None and pause_seconds > 0:
+            sleep(pause_seconds)
     df = (
         pd.concat(frames, ignore_index=True)
+        .drop_duplicates(subset=["grid_id", "date"])
+        .sort_values(["grid_id", "date"])
+        .reset_index(drop=True)
         if frames
         else pd.DataFrame(columns=CANONICAL_COLUMNS)
     )
@@ -181,6 +220,9 @@ def ingest_grid(
         row_count=len(df),
         observation_start=str(df["date"].min()) if len(df) else None,
         observation_end=str(df["date"].max()) if len(df) else None,
-        notes=DEPTH_NOTE,
+        notes=(
+            f"{DEPTH_NOTE} Daily aggregates treated as available "
+            f"{settings_obj.haze_availability_lag_hours:.0f}h after the observation day."
+        ),
     )
     return df, out_path

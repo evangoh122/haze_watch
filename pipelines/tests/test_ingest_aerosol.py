@@ -1,5 +1,6 @@
 """Unit tests: aerosol/haze ingest (CAMS via Open-Meteo Air Quality API)."""
 
+import pandas as pd
 import pytest
 
 from haze_pipelines.config import Settings
@@ -43,7 +44,13 @@ class _FakeClient:
 
     def get(self, url: str, **kwargs: object) -> _FakeResponse:
         self.requests.append((url, kwargs))
-        return _FakeResponse(self._payload)
+        # The real API echoes the requested point; mirror that so two grid
+        # points produce two distinct grid_ids.
+        params = kwargs.get("params") or {}
+        payload = dict(self._payload)
+        payload["latitude"] = params.get("latitude", payload.get("latitude"))
+        payload["longitude"] = params.get("longitude", payload.get("longitude"))
+        return _FakeResponse(payload)
 
     def close(self) -> None:
         return None
@@ -58,6 +65,8 @@ def test_normalize_aggregates_hourly_to_daily():
     assert day1["aerosol_optical_depth_mean"] == pytest.approx(0.3)
     assert day1["aerosol_optical_depth_max"] == pytest.approx(0.4)
     assert day1["pm2_5_mean"] == pytest.approx(15.0)
+    assert day1["grid_id"] == "CAMS-113.90_-2.20"
+    assert day1["available_time"] == pd.Timestamp("2023-01-04", tz="UTC")
     assert not df["is_fixture"].any()
 
 
