@@ -41,6 +41,20 @@ WEATHER_COLUMNS = [
     "wind_max_ms",
 ]
 
+AEROSOL_COLUMNS = [
+    "date",
+    "available_time",
+    "grid_id",
+    "latitude",
+    "longitude",
+    "aerosol_optical_depth_mean",
+    "aerosol_optical_depth_max",
+    "pm2_5_mean",
+    "pm10_mean",
+    "is_fixture",
+    "source",
+]
+
 FEATURE_COLUMNS = [
     "polygon_id",
     "as_of",
@@ -55,6 +69,12 @@ FEATURE_COLUMNS = [
     "wind_max_7d_ms",
     "weather_station_id",
     "weather_distance_km",
+    "aerosol_optical_depth_mean_7d",
+    "aerosol_optical_depth_max_7d",
+    "pm2_5_mean_7d",
+    "pm10_mean_7d",
+    "haze_grid_id",
+    "haze_distance_km",
 ]
 
 FORECAST_COLUMNS = [
@@ -268,6 +288,53 @@ def validate_weather(df: pd.DataFrame, *, dataset: str = "weather") -> QualityRe
 
     precip_negative = int((df["precipitation_sum_mm"] < 0).sum())
     report.add("precipitation_non_negative", precip_negative == 0, "precipitation >= 0", count=precip_negative)
+
+    return report
+
+
+def validate_aerosol(df: pd.DataFrame, *, dataset: str = "haze_aerosol") -> QualityReport:
+    """Validate a normalized CAMS aerosol/PM table."""
+    report = QualityReport(dataset)
+    missing = [c for c in AEROSOL_COLUMNS if c not in df.columns]
+    report.add(
+        "schema_complete",
+        not missing,
+        "all required columns present" if not missing else f"missing columns: {missing}",
+        count=len(missing),
+    )
+    if missing:
+        return report
+
+    report.add("non_empty", len(df) > 0, f"{len(df)} rows", count=len(df))
+
+    dupes = int(df.duplicated(subset=["grid_id", "date"]).sum())
+    report.add("no_duplicate_grid_days", dupes == 0, "unique (grid, day)", count=dupes)
+
+    dates = pd.to_datetime(df["date"], utc=True, errors="coerce")
+    avail = pd.to_datetime(df["available_time"], utc=True, errors="coerce")
+    report.add(
+        "availability_after_observation",
+        int((avail < dates).sum()) == 0,
+        "available_time >= date",
+        count=int((avail < dates).sum()),
+    )
+
+    bad_coords = df[(df["latitude"].abs() > 90) | (df["longitude"].abs() > 180)]
+    report.add(
+        "coordinate_ranges",
+        len(bad_coords) == 0,
+        "lat/lon within valid ranges" if len(bad_coords) == 0 else "out-of-range coordinates",
+        count=len(bad_coords),
+    )
+
+    negatives = int(
+        (
+            (df["aerosol_optical_depth_mean"] < 0)
+            | (df["pm2_5_mean"] < 0)
+            | (df["pm10_mean"] < 0)
+        ).sum()
+    )
+    report.add("aerosol_non_negative", negatives == 0, "AOD/PM >= 0", count=negatives)
 
     return report
 

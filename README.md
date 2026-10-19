@@ -24,11 +24,13 @@ statements, bank exposures and insurance policies.
 | Area | Status |
 |---|---|
 | Repository structure and scaffolding | Done |
-| Geospatial ingestion pipeline (`pipelines/`) | **Done — 75 tests passing** |
+| Geospatial ingestion pipeline (`pipelines/`) | **Done — 84 tests passing** |
 | FIRMS 25-year detection archive (2000-2026) | **Done — 9.6M detections in per-sensor/year GeoParquet** |
+| Weather panel (NASA POWER/MERRA-2, 1981-2026) | **Done — 5-point coverage set, 83,625 station-days** |
+| Haze/aerosol panel (CAMS, 2022-2026) | **Done — 121-point grid, 182,710 point-days** |
 | Provenance registry + data-quality gates | **Done** |
 | Concession download w/ license gate + anonymized export | **Done** |
-| Point-in-time feature building (leakage-safe) | **Done** |
+| Point-in-time feature building (leakage-safe) | **Done — fire, weather + haze joins** |
 | Baseline hazard score (deterministic, labeled) | **Done — not a model** |
 | Environment (Docker Compose, CI) | Wired; 3 GitHub Actions workflows (python, security, firms-ingest) |
 | LLM chat layer (`backend/app/llm/`) | **Done — grounded chat API + UI panel** |
@@ -37,13 +39,29 @@ statements, bank exposures and insurance policies.
 | Synthetic financial data engine | Stubs + skipped tests only |
 | ML models (segmentation, forecasting) | Not implemented |
 | Credit / insurance analytics | Stress engine done; insurance analytics planned |
+| Pre-2022 haze history (2015/2019 events) | Pending — needs NASA Earthdata (OMPS/MAIAC) |
 
 The repository **does** now produce environmental observations: `pipelines/` builds a
 versioned FIRMS archive (MODIS 2000+, VIIRS 2012+, per sensor and year, 60 files,
-9.6M detections) which is what the `/haze-watch` case study's historical work reads.
+9.6M detections), a 1981-2026 reanalysis weather panel and a CAMS haze/aerosol
+panel. The weather panel uses NASA POWER/MERRA-2 because the free Open-Meteo
+ERA5 archive quota blocked the full sweep; the ERA5 ingest path is retained.
+The weather and haze joins are point-in-time safe and feed `environmental_features`.
 What is still absent is model evaluation results and finished credit/insurance
 analytics — ML phases are unimplemented and the financial side stays synthetic.
 Status will be updated as phases land.
+
+### Historical environmental panel coverage
+
+| Panel | Span | Spatial grid | Rows | Coverage note |
+|---|---|---|---|---|
+| Fire detections (NASA FIRMS) | 2000-2026 | per sensor / 375 m-1 km | 9.6M | Complete, no missing years |
+| Weather (NASA POWER / MERRA-2) | 1981-2026 | 5-point coverage set over 110-120E, 4S-6N | 83,625 station-days | All 300 concessions within 158 km; covers 2015/2019/2023-24. ERA5 via Open-Meteo remains the primary ingest path |
+| Haze/aerosol (CAMS via Open-Meteo) | 2022-08-31 to 2026-10-18 | 121 points at 1 deg | 182,710 point-days | All 300 concessions within 75 km; pre-2022 needs Earthdata |
+
+The panels above are real observations. They are not burned area, not a calibrated
+fire probability and not a credit measure. Haze (AOD/PM) is a separate atmospheric
+product from FIRMS detections; geographic overlap is not evidence of causation.
 
 ### FIRMS history coverage
 
@@ -92,6 +110,8 @@ docker compose up --build       # PostgreSQL/PostGIS + FastAPI
 make test                       # data guard + pytest (backend, pipelines, synthetic)
 make ingest-firms               # ingest FIRMS CSVs from data/raw/firms (no key needed;
                                 # FIRMS_API_KEY only enables live API fetch)
+make ingest-weather-full        # 1981-2026 NASA POWER/MERRA-2 coverage set (5 points)
+make ingest-haze                # 2022+ CAMS grid (121 points at 1 degree)
 ```
 
 - API: http://localhost:8000 (OpenAPI at `/docs`)

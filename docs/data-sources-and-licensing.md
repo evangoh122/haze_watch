@@ -4,8 +4,9 @@ Every dataset ingested must have a row here and a matching row in the `datasets`
 database table. Record: source, license, acquisition date, spatial resolution,
 observation timestamps and vintage.
 
-> Status: register created empty. No data has been ingested yet; licenses below are
-> the expected upstream licenses and must be confirmed at acquisition time.
+> Status: live acquisitions are recorded in `data/metadata/registry.json` (with
+> checksums and observation windows); this table tracks the upstream source and
+> expected licence. Licences must still be confirmed at acquisition time.
 
 ## Environmental (real)
 
@@ -13,7 +14,8 @@ observation timestamps and vintage.
 |---|---|---|---|---|---|
 | Active fire hotspots (VIIRS/MODIS) | NASA FIRMS | NASA FIRMS terms (open, attribution) | 375 m / 1 km | — | Requires API key |
 | Multispectral imagery | Sentinel-2 (Copernicus) / Landsat (USGS) | Copernicus data licence / USGS public domain | 10–30 m | — | Phase 3 |
-| Weather / precipitation | ERA5 (Copernicus CDS) / Open-Meteo | Copernicus CDS licence / Open-Meteo terms | ~0.25° / point | 2026-10-15 (pipeline demo) | Live-verified |
+| Weather / precipitation | ERA5 via Open-Meteo (primary); NASA POWER / MERRA-2 (fallback) | Copernicus CDS / Open-Meteo terms; NASA POWER open data | ~0.25° ERA5 / 0.5° x 0.625° MERRA-2 | 2026-10-19 (1981-2026 backfill) | 5-point coverage set over 110-120E, 4S-6N; delivered panel is MERRA-2 because the free Open-Meteo ERA5 quota blocked the full sweep |
+| Haze / aerosol (AOD, PM2.5, PM10) | CAMS via Open-Meteo Air Quality API | Copernicus CAMS attribution / Open-Meteo terms | ~50 km | 2026-10-19 (2022-08-31 to 2026-10-18) | 121-point 1° grid; archive depth starts 2022-08-31 |
 | Vegetation / land cover | Copernicus Global Land Service | Copernicus licence | 100 m | — | |
 | Land cover (alternative) | MapBiomas Indonesia | Check terms at acquisition | ~30 m, 1990–2024 | — | ML features / historical change |
 | Peatland / soil | GFW ArcGIS "Indonesia Peat Lands" (layer 10) | GFW custom licence — verify | polygon | — | `fetch-concessions --source gfw-peatlands` |

@@ -52,6 +52,7 @@ SAFE_EXPORT_ROOT = REPO_ROOT / "data"  # refuse to write outside this
 EXPORT_ALLOWLIST = {
     "fire_hotspots.parquet",
     "weather.parquet",
+    "haze_aerosol.parquet",
     "environmental_features.parquet",
     "exposure.parquet",  # exported in reduced form only (see reduce_exposure)
     "exposure.summary.json",
@@ -167,7 +168,8 @@ def build_export(export_dir: Path, run_id: str) -> dict:
         "excluded_not_allowlisted": excluded,
         "treatments": {
             "fire_hotspots.parquet": "synthetic-fixture (fixtures) or real (FIRMS API pulls)",
-            "weather.parquet": "real (Open-Meteo / ERA5, attribution required)",
+            "weather.parquet": "real (NASA POWER/MERRA-2 fallback or Open-Meteo/ERA5; see registry.json for the run source)",
+            "haze_aerosol.parquet": "real (CAMS via Open-Meteo, attribution required; archive starts 2022-08-31; not fire detections)",
             "environmental_features.parquet": "derived - inherits input treatments",
             "exposure.parquet": "derived - REDUCED: centroids rounded to 0.1 deg, nearest-distance to whole km, area bucketed to 500 ha (min 500); detection density omitted (would recover exact area)",
             "exposure_public.geojson": "real-aggregated (anonymized, simplified)",
@@ -208,7 +210,8 @@ run: `{run_id}` (generated {manifest["generated_at"]}).
 | File | Treatment |
 |---|---|
 | `runs/<run_id>/processed/fire_hotspots.parquet` | hotspot detections - synthetic fixtures or real FIRMS pulls (see `registry.json`) |
-| `runs/<run_id>/processed/weather.parquet` | real weather observations (Open-Meteo / ERA5 reanalysis) |
+| `runs/<run_id>/processed/weather.parquet` | real weather observations (NASA POWER/MERRA-2 fallback or Open-Meteo/ERA5; see `registry.json`) |
+| `runs/<run_id>/processed/haze_aerosol.parquet` | real haze indicators (CAMS via Open-Meteo; 2022+; AOD/PM, not fire detections) |
 | `runs/<run_id>/processed/environmental_features.parquet` | derived point-in-time features |
 | `runs/<run_id>/processed/exposure.parquet` | derived exposure counts - **reduced**: centroids rounded to 0.1 deg (~11 km), nearest-distance to whole km, area bucketed to 500 ha |
 | `runs/<run_id>/processed/exposure_public.geojson` | anonymized, simplified concession exposure (public-safe layer) |

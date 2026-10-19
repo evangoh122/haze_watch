@@ -10,7 +10,7 @@
 | Backend API | FastAPI, Pydantic, SQLAlchemy | REST API, scenario calculations, provenance |
 | Database | PostgreSQL + PostGIS | Observations, geometries, synthetic commercial data |
 | ML / geospatial | PyTorch, scikit-learn, XGBoost, GeoPandas, Rasterio | Feature building, forecasting, segmentation |
-| Ingestion | Scheduled Python batch jobs | FIRMS, weather, land cover, peatland, concessions |
+| Ingestion | Scheduled Python batch jobs | FIRMS, ERA5 weather (NASA POWER fallback), CAMS haze, land cover, peatland, concessions |
 | Experiment tracking | MLflow | Model versions, metrics, reproducibility |
 
 ## Data flow (target)
@@ -18,9 +18,10 @@
 ```
 NASA FIRMS ─┐
 ERA5/Meteo ─┤
-Land cover ─┼─> pipelines/ingest_* ─> data/raw ─> normalize CRS + timestamps
-Peatland ───┤                          │
-Concessions ┘                          v
+CAMS haze ──┼─> pipelines/ingest_* ─> data/raw ─> normalize CRS + timestamps
+Land cover ─┤                          │
+Peatland ───┤                          v
+Concessions ┘
                                   data/processed (GeoParquet)
                                         │
               ┌─────────────────────────┼──────────────────────┐

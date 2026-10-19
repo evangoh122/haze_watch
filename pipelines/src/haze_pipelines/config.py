@@ -29,12 +29,18 @@ class Settings(BaseSettings):
     # Used for point-in-time correctness; see docs/pipeline.md.
     firms_availability_lag_hours: float = 3.0
     weather_availability_lag_hours: float = 48.0
+    # CAMS aerosol/PM products are published with a multi-day latency. Keep the
+    # same conservative point-in-time rule as weather (never borrow the future).
+    haze_availability_lag_hours: float = 72.0
 
     # Spatial defaults (WGS84).
     crs: str = "EPSG:4326"
     exposure_radius_km: float = 25.0
     # Beyond this distance a weather station no longer represents a polygon.
     weather_max_distance_km: float = 300.0
+    # CAMS is a ~50 km product; beyond this distance a grid point is not a
+    # defensible haze observation for the polygon.
+    haze_max_distance_km: float = 100.0
 
     @property
     def raw_dir(self) -> Path:

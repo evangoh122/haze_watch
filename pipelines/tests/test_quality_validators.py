@@ -3,8 +3,10 @@
 import pandas as pd
 
 from haze_pipelines.quality import (
+    AEROSOL_COLUMNS,
     FEATURE_COLUMNS,
     FORECAST_COLUMNS,
+    validate_aerosol,
     validate_exposure,
     validate_features,
     validate_forecast,
@@ -111,3 +113,37 @@ def test_exposure_validator_rejects_null_counts():
     report = validate_exposure(df)
     assert not report.passed
     assert any(c.name == "counts_non_negative" and not c.passed for c in report.checks)
+
+
+def _aerosol_df() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "date": "2026-01-01",
+                "available_time": pd.Timestamp("2026-01-04", tz="UTC"),
+                "grid_id": "CAMS-113.90_-2.20",
+                "latitude": -2.2,
+                "longitude": 113.9,
+                "aerosol_optical_depth_mean": 0.4,
+                "aerosol_optical_depth_max": 0.8,
+                "pm2_5_mean": 20.0,
+                "pm10_mean": 30.0,
+                "is_fixture": False,
+                "source": "CAMS_via_OpenMeteo",
+            }
+        ],
+        columns=AEROSOL_COLUMNS,
+    )
+
+
+def test_aerosol_validator_passes_on_good_data():
+    report = validate_aerosol(_aerosol_df())
+    assert report.passed, [c.name for c in report.errors]
+
+
+def test_aerosol_validator_flags_negative_values():
+    df = _aerosol_df()
+    df.loc[0, "pm2_5_mean"] = -1.0
+    report = validate_aerosol(df)
+    assert not report.passed
+    assert any(c.name == "aerosol_non_negative" and not c.passed for c in report.checks)
