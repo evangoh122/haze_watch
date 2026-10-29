@@ -147,3 +147,21 @@ def test_aerosol_validator_flags_negative_values():
     report = validate_aerosol(df)
     assert not report.passed
     assert any(c.name == "aerosol_non_negative" and not c.passed for c in report.checks)
+
+
+def test_aerosol_validator_rejects_unparseable_date():
+    df = _aerosol_df()
+    df.loc[0, "date"] = "not-a-date"
+    report = validate_aerosol(df)
+    assert not report.passed
+    check = next(c for c in report.checks if c.name == "timestamps_parseable")
+    assert not check.passed and check.count == 1
+
+
+def test_aerosol_validator_rejects_missing_available_time():
+    df = _aerosol_df()
+    df.loc[0, "available_time"] = None
+    report = validate_aerosol(df)
+    assert not report.passed
+    check = next(c for c in report.checks if c.name == "timestamps_parseable")
+    assert not check.passed and check.count == 1

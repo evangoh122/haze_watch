@@ -41,6 +41,24 @@ def _coord_label(value: float, positive: str, negative: str) -> str:
     return f"{abs(value):.0f}{positive if value >= 0 else negative}"
 
 
+def _day_key(value: str) -> str:
+    return value.replace("-", "")
+
+
+def _checkpoint_path(
+    checkpoint_dir: Path,
+    station: dict,
+    start_date: str,
+    end_date: str,
+) -> Path:
+    """A checkpoint is only valid for one source, point and requested window."""
+    return checkpoint_dir / (
+        f"era5-{station['station_id']}-"
+        f"{float(station['latitude']):.4f}-{float(station['longitude']):.4f}-"
+        f"{_day_key(start_date)}-{_day_key(end_date)}.parquet"
+    )
+
+
 def grid_stations(
     bbox: tuple[float, float, float, float] = INDONESIA_BBOX,
     grid: int = 6,
@@ -176,7 +194,7 @@ def ingest_stations(
     frames = []
     for index, station in enumerate(stations):
         checkpoint_path = (
-            checkpoint_dir / f"{station['station_id']}.parquet"
+            _checkpoint_path(checkpoint_dir, station, start_date, end_date)
             if checkpoint_dir is not None
             else None
         )

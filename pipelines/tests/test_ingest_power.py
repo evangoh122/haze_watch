@@ -14,7 +14,7 @@ POWER_JSON = {
             "T2M_MAX": {"20230101": 31.0, "20230102": 32.0, "20230103": -999.0},
             "PRECTOTCORR": {"20230101": 0.0, "20230102": 5.0, "20230103": -999.0},
             "RH2M": {"20230101": 80.0, "20230102": 75.0, "20230103": -999.0},
-            "WS10M": {"20230101": 3.0, "20230102": 4.0, "20230103": -999.0},
+            "WS10M_MAX": {"20230101": 3.0, "20230102": 4.0, "20230103": -999.0},
         }
     },
 }
@@ -31,6 +31,7 @@ def test_normalize_power_payload_maps_missing_and_lag():
     assert first["station_id"] == "POWER-1"
     assert first["temperature_max_c"] == 31.0
     assert first["precipitation_sum_mm"] == 0.0
+    assert first["wind_max_ms"] == 3.0
     assert first["available_time"] == pd.Timestamp("2023-01-03", tz="UTC")
 
 
@@ -95,3 +96,98 @@ class _FakeClient:
 
     def close(self) -> None:
         return None
+
+
+def test_normalize_power_payload_uses_ws10m_max_for_wind():
+    payload = {
+        "properties": {
+            "parameter": {
+                "T2M_MAX": {"20230101": 31.0},
+                "PRECTOTCORR": {"20230101": 0.0},
+                "RH2M": {"20230101": 80.0},
+                "WS10M": {"20230101": 99.0},
+                "WS10M_MAX": {"20230101": 7.0},
+            }
+        }
+    }
+    df = normalize_power_payload(payload, "POWER-1")
+    assert df.iloc[0]["wind_max_ms"] == 7.0
+
+
+class _ParamPowerClient:
+    """A POWER client that echoes the requested point and first day."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    def get(self, url: str, **kwargs: object) -> _FakeResponse:
+        params = kwargs.get("params") or {}
+        self.calls.append(dict(params))
+        day = params["start"]
+        return _FakeResponse(
+            {
+                "geometry": {
+                    "coordinates": [params["longitude"], params["latitude"], 0.0]
+                },
+                "properties": {
+                    "parameter": {
+                        "T2M_MAX": {day: 31.0},
+                        "PRECTOTCORR": {day: 0.0},
+                        "RH2M": {day: 80.0},
+                        "WS10M_MAX": {day: 5.0},
+                    }
+                },
+            }
+        )
+
+    def close(self) -> None:
+        return None
+
+
+def test_power_checkpoint_is_keyed_by_date_range_and_coordinates(tmp_path):
+    settings_obj = Settings(data_dir=tmp_path)
+    checkpoint_dir = tmp_path / "partial"
+    out = tmp_path / "weather.parquet"
+    station = {"station_id": "POWER-1", "latitude": -0.08, "longitude": 116.32}
+
+    january, _ = ingest_stations(
+        [station],
+        "2023-01-01",
+        "2023-01-02",
+        out,
+        settings_obj=settings_obj,
+        client=_ParamPowerClient(),
+        pause_seconds=0,
+        checkpoint_dir=checkpoint_dir,
+    )
+    assert january["observation_time"].dt.month.unique().tolist() == [1]
+
+    february_client = _ParamPowerClient()
+    february, _ = ingest_stations(
+        [station],
+        "2023-02-01",
+        "2023-02-02",
+        out,
+        settings_obj=settings_obj,
+        client=february_client,
+        pause_seconds=0,
+        checkpoint_dir=checkpoint_dir,
+    )
+    assert february_client.calls, "a new date range must not reuse the January checkpoint"
+    assert february["observation_time"].dt.month.unique().tolist() == [2]
+
+    moved = {"station_id": "POWER-1", "latitude": 1.5, "longitude": 118.0}
+    moved_client = _ParamPowerClient()
+    moved_df, _ = ingest_stations(
+        [moved],
+        "2023-01-01",
+        "2023-01-02",
+        out,
+        settings_obj=settings_obj,
+        client=moved_client,
+        pause_seconds=0,
+        checkpoint_dir=checkpoint_dir,
+    )
+    assert moved_client.calls, "a new coordinate pair must not reuse the old checkpoint"
+    assert moved_df["latitude"].unique().tolist() == [1.5]
+    assert len(list(checkpoint_dir.glob("power-*.parquet"))) == 3

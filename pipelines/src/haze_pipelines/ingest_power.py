@@ -27,7 +27,7 @@ from .ingest_weather import CANONICAL_COLUMNS
 from .io import write_parquet
 
 API_URL = "https://power.larc.nasa.gov/api/temporal/daily/point"
-POWER_VARS = ("T2M_MAX", "PRECTOTCORR", "RH2M", "WS10M")
+POWER_VARS = ("T2M_MAX", "PRECTOTCORR", "RH2M", "WS10M_MAX")
 MISSING = -999.0
 
 POWER_NOTE = (
@@ -39,6 +39,20 @@ POWER_NOTE = (
 
 def _day_key(value: str) -> str:
     return value.replace("-", "")
+
+
+def _checkpoint_path(
+    checkpoint_dir: Path,
+    station: dict,
+    start_date: str,
+    end_date: str,
+) -> Path:
+    """A checkpoint is only valid for one source, point and requested window."""
+    return checkpoint_dir / (
+        f"power-{station['station_id']}-"
+        f"{float(station['latitude']):.4f}-{float(station['longitude']):.4f}-"
+        f"{_day_key(start_date)}-{_day_key(end_date)}.parquet"
+    )
 
 
 def fetch_power_daily(
@@ -131,7 +145,7 @@ def normalize_power_payload(
                 "temperature_max_c": _clean(values["T2M_MAX"]),
                 "precipitation_sum_mm": _clean(values["PRECTOTCORR"]),
                 "humidity_mean_pct": _clean(values["RH2M"]),
-                "wind_max_ms": _clean(values["WS10M"]),
+                "wind_max_ms": _clean(values["WS10M_MAX"]),
             }
         )
     return pd.DataFrame(rows, columns=CANONICAL_COLUMNS)
@@ -162,7 +176,7 @@ def ingest_stations(
     frames: list[pd.DataFrame] = []
     for index, station in enumerate(stations):
         checkpoint_path = (
-            checkpoint_dir / f"{station['station_id']}.parquet"
+            _checkpoint_path(checkpoint_dir, station, start_date, end_date)
             if checkpoint_dir is not None
             else None
         )

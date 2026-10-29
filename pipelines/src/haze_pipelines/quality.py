@@ -312,6 +312,13 @@ def validate_aerosol(df: pd.DataFrame, *, dataset: str = "haze_aerosol") -> Qual
 
     dates = pd.to_datetime(df["date"], utc=True, errors="coerce")
     avail = pd.to_datetime(df["available_time"], utc=True, errors="coerce")
+    unparseable = int(dates.isna().sum() + avail.isna().sum())
+    report.add(
+        "timestamps_parseable",
+        unparseable == 0,
+        "date and availability timestamps parse as UTC",
+        count=unparseable,
+    )
     report.add(
         "availability_after_observation",
         int((avail < dates).sum()) == 0,

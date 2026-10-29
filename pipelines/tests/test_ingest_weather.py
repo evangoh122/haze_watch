@@ -2,7 +2,10 @@
 
 from datetime import UTC, datetime
 
+import pandas as pd
+
 from haze_pipelines.config import Settings
+from haze_pipelines.ingest_power import ingest_stations as ingest_power_stations
 from haze_pipelines.ingest_weather import grid_stations, ingest_stations, normalize_station_payload
 
 FAKE_PAYLOAD = {
@@ -100,8 +103,8 @@ def test_ingest_stations_resumes_from_checkpoints(tmp_path):
     )
     assert len(first) == 4
     assert sorted(path.name for path in checkpoint_dir.glob("*.parquet")) == [
-        "STN-A.parquet",
-        "STN-B.parquet",
+        "era5-STN-A--2.0000-113.0000-20260101-20260102.parquet",
+        "era5-STN-B-0.0000-116.0000-20260101-20260102.parquet",
     ]
 
     # A rerun must not touch the API: both stations are already checkpointed.
@@ -115,3 +118,131 @@ def test_ingest_stations_resumes_from_checkpoints(tmp_path):
         checkpoint_dir=checkpoint_dir,
     )
     assert len(second) == 4
+
+
+class _ParamWeatherClient:
+    """An Open-Meteo client that echoes the requested point and date window."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    def get(self, url: str, **kwargs: object) -> _FakeResponse:
+        params = kwargs.get("params") or {}
+        self.calls.append(dict(params))
+        days = [
+            day.strftime("%Y-%m-%d")
+            for day in pd.date_range(params["start_date"], params["end_date"])
+        ]
+        return _FakeResponse(
+            {
+                "latitude": params["latitude"],
+                "longitude": params["longitude"],
+                "daily": {
+                    "time": days,
+                    "temperature_2m_max": [20.0] * len(days),
+                    "precipitation_sum": [1.0] * len(days),
+                    "relative_humidity_2m_mean": [70.0] * len(days),
+                    "wind_speed_10m_max": [5.0] * len(days),
+                },
+            }
+        )
+
+    def close(self) -> None:
+        return None
+
+
+def test_weather_checkpoint_is_keyed_by_date_range_and_coordinates(tmp_path):
+    settings_obj = Settings(data_dir=tmp_path)
+    checkpoint_dir = tmp_path / "partial"
+    out = tmp_path / "weather.parquet"
+    station = {"station_id": "STN-A", "label": "A", "latitude": -2.0, "longitude": 113.0}
+
+    ingest_stations(
+        [station],
+        "2026-01-01",
+        "2026-01-02",
+        out,
+        settings_obj=settings_obj,
+        client=_ParamWeatherClient(),
+        checkpoint_dir=checkpoint_dir,
+    )
+
+    february_client = _ParamWeatherClient()
+    february, _ = ingest_stations(
+        [station],
+        "2026-02-01",
+        "2026-02-03",
+        out,
+        settings_obj=settings_obj,
+        client=february_client,
+        checkpoint_dir=checkpoint_dir,
+    )
+    assert february_client.calls, "a new date range must not reuse the January checkpoint"
+    assert february["observation_time"].dt.month.unique().tolist() == [2]
+    assert len(february) == 3
+
+    moved = {"station_id": "STN-A", "label": "A", "latitude": 1.0, "longitude": 115.0}
+    moved_client = _ParamWeatherClient()
+    moved_df, _ = ingest_stations(
+        [moved],
+        "2026-01-01",
+        "2026-01-02",
+        out,
+        settings_obj=settings_obj,
+        client=moved_client,
+        checkpoint_dir=checkpoint_dir,
+    )
+    assert moved_client.calls, "a new coordinate pair must not reuse the old checkpoint"
+    assert moved_df["latitude"].unique().tolist() == [1.0]
+    assert len(list(checkpoint_dir.glob("era5-*.parquet"))) == 3
+
+
+POWER_PAYLOAD = {
+    "properties": {
+        "parameter": {
+            "T2M_MAX": {"20230101": 31.0, "20230102": 32.0},
+            "PRECTOTCORR": {"20230101": 0.0, "20230102": 0.0},
+            "RH2M": {"20230101": 80.0, "20230102": 80.0},
+            "WS10M_MAX": {"20230101": 5.0, "20230102": 6.0},
+        }
+    }
+}
+
+
+class _PowerClient:
+    def get(self, url: str, **kwargs: object) -> _FakeResponse:
+        return _FakeResponse(POWER_PAYLOAD)
+
+    def close(self) -> None:
+        return None
+
+
+def test_power_and_weather_checkpoints_do_not_collide(tmp_path):
+    settings_obj = Settings(data_dir=tmp_path)
+    checkpoint_dir = tmp_path / "partial"
+    station = {"station_id": "SHARED", "label": "shared", "latitude": -2.0, "longitude": 113.0}
+
+    power_df, _ = ingest_power_stations(
+        [{"station_id": "SHARED", "latitude": -2.0, "longitude": 113.0}],
+        "2023-01-01",
+        "2023-01-02",
+        tmp_path / "power.parquet",
+        settings_obj=settings_obj,
+        client=_PowerClient(),
+        pause_seconds=0,
+        checkpoint_dir=checkpoint_dir,
+    )
+    assert power_df["temperature_max_c"].tolist() == [31.0, 32.0]
+
+    weather_df, _ = ingest_stations(
+        [station],
+        "2023-01-01",
+        "2023-01-02",
+        tmp_path / "weather.parquet",
+        settings_obj=settings_obj,
+        client=_ParamWeatherClient(),
+        checkpoint_dir=checkpoint_dir,
+    )
+    assert weather_df["temperature_max_c"].tolist() == [20.0, 20.0]
+    assert len(list(checkpoint_dir.glob("power-*.parquet"))) == 1
+    assert len(list(checkpoint_dir.glob("era5-*.parquet"))) == 1

@@ -317,7 +317,7 @@ export default function HazeWatch() {
             <div className="glass-card rounded-2xl p-5">
               <div className="text-[10px] font-mono text-accent-bright mb-3">01 / ingest</div>
               <h4 className="text-sm font-semibold text-primary mb-2">Real environmental feeds</h4>
-              <p className="text-[11px] text-secondary/80 leading-relaxed m-0">NASA FIRMS hotspot detections and ERA5/Open-Meteo reanalysis weather, each registered with source, licence, treatment and checksum in a provenance ledger.</p>
+              <p className="text-[11px] text-secondary/80 leading-relaxed m-0">NASA FIRMS hotspot detections and NASA POWER/MERRA-2 reanalysis weather, each registered with source, licence, treatment and checksum in a provenance ledger.</p>
             </div>
             <div className="glass-card rounded-2xl p-5">
               <div className="text-[10px] font-mono text-accent-bright mb-3">02 / join</div>
@@ -387,7 +387,7 @@ export default function HazeWatch() {
               <div className="text-[11px] text-secondary/70 mt-1">hazard horizons</div>
             </div>
             <div className="rounded-2xl border border-border/60 bg-surface/60 p-5 text-center">
-              <div className="text-2xl font-mono font-semibold text-accent-bright">75</div>
+              <div className="text-2xl font-mono font-semibold text-accent-bright">90</div>
               <div className="text-[11px] text-secondary/70 mt-1">pipeline tests</div>
             </div>
           </div>
