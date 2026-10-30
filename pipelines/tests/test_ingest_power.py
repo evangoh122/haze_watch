@@ -2,7 +2,11 @@
 
 import pandas as pd
 
+from haze_pipelines.build_features import build_features
 from haze_pipelines.config import Settings
+from haze_pipelines.fixtures import fixture_hotspots, fixture_polygon_features
+from haze_pipelines.ingest_firms import normalize_firms
+from haze_pipelines.ingest_polygons import normalize_polygons
 from haze_pipelines.ingest_power import ingest_stations, normalize_power_payload
 from haze_pipelines.ingest_weather import CANONICAL_COLUMNS
 from haze_pipelines.provenance import read_registry
@@ -22,7 +26,10 @@ POWER_JSON = {
 
 def test_normalize_power_payload_maps_missing_and_lag():
     df = normalize_power_payload(
-        POWER_JSON, "POWER-1", availability_lag_hours=48.0
+        POWER_JSON,
+        "POWER-1",
+        availability_lag_hours=48.0,
+        fetched_at=pd.Timestamp("2023-01-04", tz="UTC"),  # rows are near-real-time
     )
 
     assert list(df.columns) == CANONICAL_COLUMNS
@@ -212,6 +219,8 @@ def test_power_checkpoint_distinguishes_sub_millidegree_coordinates(tmp_path):
             client=client,
             pause_seconds=0,
             checkpoint_dir=checkpoint_dir,
+            # fetched during the window so the rows are near-real-time (obs + lag)
+            clock=lambda: pd.Timestamp("2023-01-03", tz="UTC"),
         )
         return df
 
@@ -256,6 +265,8 @@ def test_power_checkpoint_is_keyed_by_availability_lag(tmp_path):
             client=client,
             pause_seconds=0,
             checkpoint_dir=checkpoint_dir,
+            # fetched during the window so the rows are near-real-time (obs + lag)
+            clock=lambda: pd.Timestamp("2023-01-03", tz="UTC"),
         )
         return df
 
@@ -282,6 +293,8 @@ def test_power_checkpoint_keeps_close_availability_lags_distinct(tmp_path):
             client=client,
             pause_seconds=0,
             checkpoint_dir=checkpoint_dir,
+            # fetched during the window so the rows are near-real-time (obs + lag)
+            clock=lambda: pd.Timestamp("2023-01-03", tz="UTC"),
         )
         return df
 
@@ -293,4 +306,153 @@ def test_power_checkpoint_keeps_close_availability_lags_distinct(tmp_path):
     )
     gap = second["available_time"] - second["observation_time"]
     assert (gap == pd.Timedelta(hours=48.00002)).all()
+    assert len(list(checkpoint_dir.glob("power-*.parquet"))) == 2
+
+
+FETCHED = pd.Timestamp("2026-10-30T12:00:00", tz="UTC")
+
+
+def _two_day_payload(*days: str) -> dict:
+    return {
+        "geometry": {"coordinates": [116.32, -0.08, 0.0]},
+        "properties": {
+            "parameter": {
+                name: {day: value for day in days}
+                for name, value in (
+                    ("T2M_MAX", 31.0),
+                    ("PRECTOTCORR", 1.0),
+                    ("RH2M", 80.0),
+                    ("WS10M_MAX", 4.0),
+                )
+            }
+        },
+    }
+
+
+def test_backfill_row_is_not_available_before_fetch_time():
+    df = normalize_power_payload(
+        _two_day_payload("20230101"),
+        "POWER-1",
+        availability_lag_hours=48.0,
+        fetched_at=FETCHED,
+    )
+    # Old behaviour stamped 2023-01-03, letting a 2026-02-01 as_of see values that
+    # NASA only served (and may have revised) on the fetch date.
+    assert df.iloc[0]["available_time"] == FETCHED
+
+
+def test_near_real_time_row_keeps_observation_plus_lag():
+    df = normalize_power_payload(
+        _two_day_payload("20261025", "20230101"),
+        "POWER-1",
+        availability_lag_hours=48.0,
+        fetched_at=FETCHED,
+        near_real_time_days=30.0,
+    )
+    recent = df[df["observation_time"] == pd.Timestamp("2026-10-25", tz="UTC")].iloc[0]
+    old = df[df["observation_time"] == pd.Timestamp("2023-01-01", tz="UTC")].iloc[0]
+    assert recent["available_time"] == pd.Timestamp("2026-10-27", tz="UTC")
+    assert old["available_time"] == FETCHED
+
+
+def test_backfill_availability_never_precedes_observation_plus_lag():
+    # A row just outside the window whose obs + lag is later than the fetch time
+    # (tiny window, huge lag) must keep the later of the two.
+    df = normalize_power_payload(
+        _two_day_payload("20261029"),
+        "POWER-1",
+        availability_lag_hours=240.0,
+        fetched_at=FETCHED,
+        near_real_time_days=0.5,
+    )
+    assert df.iloc[0]["available_time"] == pd.Timestamp("2026-11-08", tz="UTC")
+
+
+def test_build_features_excludes_backfill_rows_before_fetch_time():
+    weather = normalize_power_payload(
+        _two_day_payload("20260115"),
+        "POWER-1",
+        latitude=-2.0,
+        longitude=113.0,
+        availability_lag_hours=48.0,
+        fetched_at=FETCHED,
+    )
+    polygons = normalize_polygons(
+        fixture_polygon_features(),
+        source_dataset="FIXTURE",
+        boundary_type="concession",
+        license="test",
+        vintage="2026",
+        treatment="synthetic-fixture",
+    )[0]
+    hot = normalize_firms(
+        fixture_hotspots(n=2), source="FIXTURE", available_lag_hours=0.0, is_fixture=True
+    )
+    before = build_features(polygons, hot, weather, pd.Timestamp("2026-02-01", tz="UTC"))
+    assert before["temp_max_7d_c"].isna().all()
+    assert before["weather_station_id"].isna().all()
+    # Once the fetch time has passed the same row is visible to the builder.
+    after = build_features(polygons, hot, weather, FETCHED + pd.Timedelta(hours=1))
+    assert after["weather_station_id"].eq("POWER-1").all()
+
+
+class _Clock:
+    def __init__(self, *times: pd.Timestamp) -> None:
+        self._times = list(times)
+
+    def __call__(self) -> pd.Timestamp:
+        return self._times.pop(0)
+
+
+def test_power_checkpoint_cache_hit_preserves_original_fetch_time(tmp_path):
+    checkpoint_dir = tmp_path / "partial"
+    out = tmp_path / "weather.parquet"
+    station = {"station_id": "POWER-1", "latitude": -0.08, "longitude": 116.32}
+    settings_obj = Settings(data_dir=tmp_path)
+
+    def run(client, clock):
+        df, _ = ingest_stations(
+            [station],
+            "2023-01-01",
+            "2023-01-02",
+            out,
+            settings_obj=settings_obj,
+            client=client,
+            pause_seconds=0,
+            checkpoint_dir=checkpoint_dir,
+            clock=clock,
+        )
+        return df
+
+    first = run(_ParamPowerClient(), _Clock(FETCHED))
+    rerun_client = _ParamPowerClient()
+    rerun = run(rerun_client, _Clock(FETCHED + pd.Timedelta(days=9)))
+    assert not rerun_client.calls, "same rule must hit the checkpoint"
+    assert (first["available_time"] == FETCHED).all()
+    assert (rerun["available_time"] == FETCHED).all()
+
+
+def test_power_checkpoint_is_keyed_by_near_real_time_cutoff(tmp_path):
+    checkpoint_dir = tmp_path / "partial"
+    out = tmp_path / "weather.parquet"
+    station = {"station_id": "POWER-1", "latitude": -0.08, "longitude": 116.32}
+
+    def run(days: float, client: _ParamPowerClient):
+        ingest_stations(
+            [station],
+            "2023-01-01",
+            "2023-01-02",
+            out,
+            settings_obj=Settings(data_dir=tmp_path),
+            client=client,
+            pause_seconds=0,
+            checkpoint_dir=checkpoint_dir,
+            near_real_time_days=days,
+            clock=_Clock(FETCHED),
+        )
+
+    run(30.0, _ParamPowerClient())
+    other = _ParamPowerClient()
+    run(7.0, other)
+    assert other.calls, "a changed vintage cutoff must not reuse the old checkpoint"
     assert len(list(checkpoint_dir.glob("power-*.parquet"))) == 2

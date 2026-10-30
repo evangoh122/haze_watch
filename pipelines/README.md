@@ -20,6 +20,6 @@ Common requirements for every job:
 
 - Normalize CRS to EPSG:4326 and timestamps to UTC on ingest.
 - Record dataset provenance (see `data/metadata/datasets.yaml`).
-- Store both `observation_time` and `available_time` for observations used in training.
+- Store both `observation_time` and `available_time` for observations used in training.  Reanalysis backfills (NASA POWER) are stamped with the fetch time, not obs + lag.
 - Deduplicate hotspots and validate polygon geometry (see testing plan in
   `project_profile.md` section 11).
