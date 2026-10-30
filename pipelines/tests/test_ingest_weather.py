@@ -246,3 +246,24 @@ def test_power_and_weather_checkpoints_do_not_collide(tmp_path):
     assert weather_df["temperature_max_c"].tolist() == [20.0, 20.0]
     assert len(list(checkpoint_dir.glob("power-*.parquet"))) == 1
     assert len(list(checkpoint_dir.glob("era5-*.parquet"))) == 1
+
+
+def test_fractional_grid_keeps_every_point_through_ingestion(tmp_path):
+    # 2x2 degree box at grid=5 is 0.5 degree spacing: whole-degree labels would
+    # collapse 25 points into 9 IDs and the dedupe would silently drop the rest.
+    stations = grid_stations(bbox=(110.0, -4.0, 112.0, -2.0), grid=5)
+    assert len(stations) == 25
+    assert len({s["station_id"] for s in stations}) == 25
+    assert "ERA5-110.5E-3.5S" in {s["station_id"] for s in stations}
+
+    df, _ = ingest_stations(
+        stations,
+        "2026-01-01",
+        "2026-01-01",
+        tmp_path / "weather.parquet",
+        settings_obj=Settings(data_dir=tmp_path),
+        client=_ParamWeatherClient(),
+    )
+    assert df["station_id"].nunique() == 25
+    assert len(df) == 25
+    assert len(pd.read_parquet(tmp_path / "weather.parquet")) == 25

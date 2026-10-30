@@ -38,7 +38,13 @@ CANONICAL_COLUMNS = [
 
 
 def _coord_label(value: float, positive: str, negative: str) -> str:
-    return f"{abs(value):.0f}{positive if value >= 0 else negative}"
+    """Label a coordinate without collapsing distinct points.
+
+    Whole degrees keep the short legacy form (``110E``); fractional values keep up
+    to three decimals (``110.5E``) so subdegree grids get unique station IDs.
+    """
+    magnitude = f"{abs(value):.3f}".rstrip("0").rstrip(".")
+    return f"{magnitude}{positive if value >= 0 else negative}"
 
 
 def _day_key(value: str) -> str:

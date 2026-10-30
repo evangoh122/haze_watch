@@ -1,0 +1,10 @@
+## ruff check (CI cmd): uv-less ruff check backend ml pipelines synthetic private scripts -> All checks passed!
+## ruff format --check pipelines: 17 files pre-existing unformatted (CI runs only ruff check); not applied
+## pytest pipelines/tests -q: 91 passed (was 90)
+## mutation (old :.0f label) -> new test fails:
+E        +  where 9 = len({'ERA5-110E-2S', 'ERA5-110E-3S', 'ERA5-110E-4S', 'ERA5-111E-2S', 'ERA5-111E-3S', 'ERA5-111E-4S', ...})
+
+pipelines/tests/test_ingest_weather.py:256: AssertionError
+=========================== short test summary info ============================
+FAILED pipelines/tests/test_ingest_weather.py::test_fractional_grid_keeps_every_point_through_ingestion
+1 failed, 6 passed in 1.03s
