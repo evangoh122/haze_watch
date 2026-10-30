@@ -217,3 +217,32 @@ def test_power_checkpoint_is_keyed_by_availability_lag(tmp_path):
     assert slower_client.calls, "a changed lag must not reuse the old checkpoint"
     gap = slower["available_time"] - slower["observation_time"]
     assert (gap == pd.Timedelta(hours=72)).all()
+
+
+def test_power_checkpoint_keeps_close_availability_lags_distinct(tmp_path):
+    checkpoint_dir = tmp_path / "partial"
+    out = tmp_path / "weather.parquet"
+    station = {"station_id": "POWER-1", "latitude": -0.08, "longitude": 116.32}
+
+    def run(lag: float, client: _ParamPowerClient):
+        df, _ = ingest_stations(
+            [station],
+            "2023-01-01",
+            "2023-01-02",
+            out,
+            settings_obj=Settings(data_dir=tmp_path, weather_availability_lag_hours=lag),
+            client=client,
+            pause_seconds=0,
+            checkpoint_dir=checkpoint_dir,
+        )
+        return df
+
+    run(48.00001, _ParamPowerClient())
+    second_client = _ParamPowerClient()
+    second = run(48.00002, second_client)
+    assert second_client.calls, (
+        "lags differing below 6 significant digits must not share a checkpoint"
+    )
+    gap = second["available_time"] - second["observation_time"]
+    assert (gap == pd.Timedelta(hours=48.00002)).all()
+    assert len(list(checkpoint_dir.glob("power-*.parquet"))) == 2

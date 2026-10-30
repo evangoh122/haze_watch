@@ -6,7 +6,12 @@ import pandas as pd
 
 from haze_pipelines.config import Settings
 from haze_pipelines.ingest_power import ingest_stations as ingest_power_stations
-from haze_pipelines.ingest_weather import grid_stations, ingest_stations, normalize_station_payload
+from haze_pipelines.ingest_weather import (
+    _lag_token,
+    grid_stations,
+    ingest_stations,
+    normalize_station_payload,
+)
 
 FAKE_PAYLOAD = {
     "latitude": -2.2144,
@@ -299,3 +304,38 @@ def test_weather_checkpoint_is_keyed_by_availability_lag(tmp_path):
     assert slower_client.calls, "a changed lag must not reuse the old checkpoint"
     gap = slower["available_time"] - slower["observation_time"]
     assert (gap == pd.Timedelta(hours=72)).all()
+
+
+def test_lag_token_keeps_extreme_lags_lossless_and_filesystem_safe():
+    tokens = {lag: _lag_token(lag) for lag in (48.0, 48.00001, 48.00002, 1e-05, 1e16)}
+    assert tokens[48.0] == "48"
+    assert len(set(tokens.values())) == len(tokens)
+    assert all("/" not in token and "\\" not in token for token in tokens.values())
+
+
+def test_weather_checkpoint_keeps_close_availability_lags_distinct(tmp_path):
+    checkpoint_dir = tmp_path / "partial"
+    out = tmp_path / "weather.parquet"
+    station = {"station_id": "STN-A", "label": "A", "latitude": -2.0, "longitude": 113.0}
+
+    def run(lag: float, client: _ParamWeatherClient) -> pd.DataFrame:
+        df, _ = ingest_stations(
+            [station],
+            "2026-01-01",
+            "2026-01-02",
+            out,
+            settings_obj=Settings(data_dir=tmp_path, weather_availability_lag_hours=lag),
+            client=client,
+            checkpoint_dir=checkpoint_dir,
+        )
+        return df
+
+    run(48.00001, _ParamWeatherClient())
+    second_client = _ParamWeatherClient()
+    second = run(48.00002, second_client)
+    assert second_client.calls, (
+        "lags differing below 6 significant digits must not share a checkpoint"
+    )
+    gap = second["available_time"] - second["observation_time"]
+    assert (gap == pd.Timedelta(hours=48.00002)).all()
+    assert len(list(checkpoint_dir.glob("era5-*.parquet"))) == 2

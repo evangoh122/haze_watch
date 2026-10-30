@@ -51,6 +51,17 @@ def _day_key(value: str) -> str:
     return value.replace("-", "")
 
 
+def _lag_token(lag_hours: float) -> str:
+    """Serialize an availability lag losslessly for a checkpoint filename.
+
+    ``:g`` rounds to six significant digits, so 48.00001 and 48.00002 would share
+    a checkpoint. The shortest round-trip repr keeps them distinct; the trailing
+    ``.0`` is stripped so integer lags still produce ``lag48h``. Exponent forms
+    such as ``1e-05`` and ``1e+16`` are filesystem-safe and remain distinct.
+    """
+    return repr(float(lag_hours)).removesuffix(".0")
+
+
 def _checkpoint_path(
     checkpoint_dir: Path,
     station: dict,
@@ -62,7 +73,8 @@ def _checkpoint_path(
     return checkpoint_dir / (
         f"era5-{station['station_id']}-"
         f"{float(station['latitude']):.4f}-{float(station['longitude']):.4f}-"
-        f"{_day_key(start_date)}-{_day_key(end_date)}-lag{lag_hours:g}h.parquet"
+        f"{_day_key(start_date)}-{_day_key(end_date)}-"
+        f"lag{_lag_token(lag_hours)}h.parquet"
     )
 
 
