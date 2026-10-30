@@ -103,8 +103,8 @@ def test_ingest_stations_resumes_from_checkpoints(tmp_path):
     )
     assert len(first) == 4
     assert sorted(path.name for path in checkpoint_dir.glob("*.parquet")) == [
-        "era5-STN-A--2.0000-113.0000-20260101-20260102.parquet",
-        "era5-STN-B-0.0000-116.0000-20260101-20260102.parquet",
+        "era5-STN-A--2.0000-113.0000-20260101-20260102-lag48h.parquet",
+        "era5-STN-B-0.0000-116.0000-20260101-20260102-lag48h.parquet",
     ]
 
     # A rerun must not touch the API: both stations are already checkpointed.
@@ -267,3 +267,35 @@ def test_fractional_grid_keeps_every_point_through_ingestion(tmp_path):
     assert df["station_id"].nunique() == 25
     assert len(df) == 25
     assert len(pd.read_parquet(tmp_path / "weather.parquet")) == 25
+
+
+def test_station_ids_stay_distinct_below_millidegree_spacing():
+    # 0.0005 degree spacing: a 3-decimal label collapses neighbouring points.
+    stations = grid_stations(bbox=(110.0, -4.0, 110.002, -3.998), grid=5)
+    assert len(stations) == 25
+    assert len({s["station_id"] for s in stations}) == 25
+
+
+def test_weather_checkpoint_is_keyed_by_availability_lag(tmp_path):
+    checkpoint_dir = tmp_path / "partial"
+    out = tmp_path / "weather.parquet"
+    station = {"station_id": "STN-A", "label": "A", "latitude": -2.0, "longitude": 113.0}
+
+    def run(lag: float, client: _ParamWeatherClient) -> pd.DataFrame:
+        df, _ = ingest_stations(
+            [station],
+            "2026-01-01",
+            "2026-01-02",
+            out,
+            settings_obj=Settings(data_dir=tmp_path, weather_availability_lag_hours=lag),
+            client=client,
+            checkpoint_dir=checkpoint_dir,
+        )
+        return df
+
+    run(48.0, _ParamWeatherClient())
+    slower_client = _ParamWeatherClient()
+    slower = run(72.0, slower_client)
+    assert slower_client.calls, "a changed lag must not reuse the old checkpoint"
+    gap = slower["available_time"] - slower["observation_time"]
+    assert (gap == pd.Timedelta(hours=72)).all()

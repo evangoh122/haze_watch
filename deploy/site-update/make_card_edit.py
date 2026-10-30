@@ -454,10 +454,10 @@ def edit(source: Path, out_dir: Path) -> Path:
     event.stopPropagation();
   };
   const onDeckPointerCancel = () => {
-    // A cancelled pointer is not a completed swipe. Reset the drag and suppress
-    // any click the browser might still emit over the card underneath.
+    // A cancelled pointer is not a completed swipe and emits no click, so clear
+    // the suppression flag; a later keyboard-generated click must not be eaten.
     dragFrom.current = null;
-    dragged.current = true;
+    dragged.current = false;
   };""")
 
     # 3) accessible names below sm: the visible labels hide on small screens, so

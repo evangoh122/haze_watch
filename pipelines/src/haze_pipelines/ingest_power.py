@@ -46,12 +46,13 @@ def _checkpoint_path(
     station: dict,
     start_date: str,
     end_date: str,
+    lag_hours: float,
 ) -> Path:
-    """A checkpoint is only valid for one source, point and requested window."""
+    """A checkpoint is only valid for one source, point, window and availability lag."""
     return checkpoint_dir / (
         f"power-{station['station_id']}-"
         f"{float(station['latitude']):.4f}-{float(station['longitude']):.4f}-"
-        f"{_day_key(start_date)}-{_day_key(end_date)}.parquet"
+        f"{_day_key(start_date)}-{_day_key(end_date)}-lag{lag_hours:g}h.parquet"
     )
 
 
@@ -176,7 +177,13 @@ def ingest_stations(
     frames: list[pd.DataFrame] = []
     for index, station in enumerate(stations):
         checkpoint_path = (
-            _checkpoint_path(checkpoint_dir, station, start_date, end_date)
+            _checkpoint_path(
+                checkpoint_dir,
+                station,
+                start_date,
+                end_date,
+                settings_obj.weather_availability_lag_hours,
+            )
             if checkpoint_dir is not None
             else None
         )

@@ -40,10 +40,10 @@ CANONICAL_COLUMNS = [
 def _coord_label(value: float, positive: str, negative: str) -> str:
     """Label a coordinate without collapsing distinct points.
 
-    Whole degrees keep the short legacy form (``110E``); fractional values keep up
-    to three decimals (``110.5E``) so subdegree grids get unique station IDs.
+    Whole degrees keep the short legacy form (``110E``); fractional values use the
+    shortest round-trip repr (``110.5E``) so no two distinct points share an ID.
     """
-    magnitude = f"{abs(value):.3f}".rstrip("0").rstrip(".")
+    magnitude = repr(abs(float(value))).removesuffix(".0")
     return f"{magnitude}{positive if value >= 0 else negative}"
 
 
@@ -56,12 +56,13 @@ def _checkpoint_path(
     station: dict,
     start_date: str,
     end_date: str,
+    lag_hours: float,
 ) -> Path:
-    """A checkpoint is only valid for one source, point and requested window."""
+    """A checkpoint is only valid for one source, point, window and availability lag."""
     return checkpoint_dir / (
         f"era5-{station['station_id']}-"
         f"{float(station['latitude']):.4f}-{float(station['longitude']):.4f}-"
-        f"{_day_key(start_date)}-{_day_key(end_date)}.parquet"
+        f"{_day_key(start_date)}-{_day_key(end_date)}-lag{lag_hours:g}h.parquet"
     )
 
 
@@ -200,7 +201,13 @@ def ingest_stations(
     frames = []
     for index, station in enumerate(stations):
         checkpoint_path = (
-            _checkpoint_path(checkpoint_dir, station, start_date, end_date)
+            _checkpoint_path(
+                checkpoint_dir,
+                station,
+                start_date,
+                end_date,
+                settings_obj.weather_availability_lag_hours,
+            )
             if checkpoint_dir is not None
             else None
         )

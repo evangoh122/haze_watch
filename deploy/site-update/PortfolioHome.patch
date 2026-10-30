@@ -71,10 +71,10 @@
 +    event.stopPropagation();
 +  };
 +  const onDeckPointerCancel = () => {
-+    // A cancelled pointer is not a completed swipe. Reset the drag and suppress
-+    // any click the browser might still emit over the card underneath.
++    // A cancelled pointer is not a completed swipe and emits no click, so clear
++    // the suppression flag; a later keyboard-generated click must not be eaten.
 +    dragFrom.current = null;
-+    dragged.current = true;
++    dragged.current = false;
 +  };
    const landingTour = useTour(LANDING_TOUR_KEY);
    const activateCardOnKeyDown = (event: KeyboardEvent<HTMLDivElement>, action: () => void) => {

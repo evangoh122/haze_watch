@@ -191,3 +191,29 @@ def test_power_checkpoint_is_keyed_by_date_range_and_coordinates(tmp_path):
     assert moved_client.calls, "a new coordinate pair must not reuse the old checkpoint"
     assert moved_df["latitude"].unique().tolist() == [1.5]
     assert len(list(checkpoint_dir.glob("power-*.parquet"))) == 3
+
+
+def test_power_checkpoint_is_keyed_by_availability_lag(tmp_path):
+    checkpoint_dir = tmp_path / "partial"
+    out = tmp_path / "weather.parquet"
+    station = {"station_id": "POWER-1", "latitude": -0.08, "longitude": 116.32}
+
+    def run(lag: float, client: _ParamPowerClient):
+        df, _ = ingest_stations(
+            [station],
+            "2023-01-01",
+            "2023-01-02",
+            out,
+            settings_obj=Settings(data_dir=tmp_path, weather_availability_lag_hours=lag),
+            client=client,
+            pause_seconds=0,
+            checkpoint_dir=checkpoint_dir,
+        )
+        return df
+
+    run(48.0, _ParamPowerClient())
+    slower_client = _ParamPowerClient()
+    slower = run(72.0, slower_client)
+    assert slower_client.calls, "a changed lag must not reuse the old checkpoint"
+    gap = slower["available_time"] - slower["observation_time"]
+    assert (gap == pd.Timedelta(hours=72)).all()

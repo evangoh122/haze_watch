@@ -164,6 +164,8 @@ utility quietly winning.
 
    Unlayered on purpose: layered utilities must not outrank these rules. */
 .haze-deck {
+  /* horizontal swipes belong to the carousel; vertical scroll and pinch zoom stay on */
+  touch-action: pan-y pinch-zoom;
   --deck-peek: 40px;
   --deck-peek-2: 80px;
   display: grid;
