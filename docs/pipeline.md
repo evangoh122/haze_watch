@@ -264,7 +264,9 @@ runs (see docs/llm.md).
   NASA POWER/MERRA-2, which has much looser limits and is clearly labelled in
   provenance. Both weather ingesters support `--pause`, `--retries` 429 backoff
   and `--checkpoint-dir` so a late failure resumes instead of refetching
-  completed stations. MERRA-2 is not ERA5; do not describe the fallback panel as
+  completed stations. ERA5 checkpoint names carry a `windms` marker, so
+  checkpoints cached before wind was requested in m/s are refetched rather than
+  reused. MERRA-2 is not ERA5; do not describe the fallback panel as
   ERA5.
 - Pre-2022 haze requires NASA Earthdata (OMPS Aerosol Index 2012+ / MODIS MAIAC AOD
   2000+). CAMS via Open-Meteo only starts 2022-08-31, so the 2015 and 2019 haze

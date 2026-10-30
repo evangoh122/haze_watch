@@ -38,6 +38,11 @@ CANONICAL_COLUMNS = [
     "wind_max_ms",
 ]
 
+# Marker in ERA5 checkpoint names. Older checkpoints were fetched with
+# Open-Meteo's default km/h while the canonical column is m/s, so their identity
+# must never match an m/s request; this marker makes a resume refetch them.
+CHECKPOINT_WIND_UNIT = "windms"
+
 
 def _coord_label(value: float, positive: str, negative: str) -> str:
     """Label a coordinate without collapsing distinct points.
@@ -81,12 +86,13 @@ def _checkpoint_path(
     end_date: str,
     lag_hours: float,
 ) -> Path:
-    """A checkpoint is only valid for one source, point, window and availability lag."""
+    """A checkpoint is only valid for one source, point, window, lag and wind unit."""
     return checkpoint_dir / (
         f"era5-{station['station_id']}-"
         f"lat{_coord_token(station['latitude'])}-lon{_coord_token(station['longitude'])}-"
         f"{_day_key(start_date)}-{_day_key(end_date)}-"
-        f"lag{_lag_token(lag_hours)}h.parquet"
+        f"lag{_lag_token(lag_hours)}h-"
+        f"{CHECKPOINT_WIND_UNIT}.parquet"
     )
 
 
@@ -258,7 +264,10 @@ def ingest_stations(
             write_parquet(
                 frame,
                 checkpoint_path,
-                extra_metadata={"dataset": "weather_observations_partial"},
+                extra_metadata={
+                    "dataset": "weather_observations_partial",
+                    "wind_speed_unit": "ms",
+                },
             )
         frames.append(frame)
         if index < len(stations) - 1 and pause_seconds > 0:

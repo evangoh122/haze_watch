@@ -7,11 +7,13 @@ import pandas as pd
 from haze_pipelines.config import Settings
 from haze_pipelines.ingest_power import ingest_stations as ingest_power_stations
 from haze_pipelines.ingest_weather import (
+    _checkpoint_path,
     _lag_token,
     grid_stations,
     ingest_stations,
     normalize_station_payload,
 )
+from haze_pipelines.io import write_parquet
 
 FAKE_PAYLOAD = {
     "latitude": -2.2144,
@@ -108,8 +110,8 @@ def test_ingest_stations_resumes_from_checkpoints(tmp_path):
     )
     assert len(first) == 4
     assert sorted(path.name for path in checkpoint_dir.glob("*.parquet")) == [
-        "era5-STN-A-lat-2.0-lon113.0-20260101-20260102-lag48h.parquet",
-        "era5-STN-B-lat0.0-lon116.0-20260101-20260102-lag48h.parquet",
+        "era5-STN-A-lat-2.0-lon113.0-20260101-20260102-lag48h-windms.parquet",
+        "era5-STN-B-lat0.0-lon116.0-20260101-20260102-lag48h-windms.parquet",
     ]
 
     # A rerun must not touch the API: both stations are already checkpointed.
@@ -209,6 +211,140 @@ def test_ingest_requests_wind_speed_in_metres_per_second(tmp_path):
     assert client.calls
     assert df["wind_max_ms"].tolist() == [5.0, 5.0]
     assert all(call["wind_speed_unit"] == "ms" for call in client.calls)
+
+
+def _legacy_era5_checkpoint(checkpoint_dir, station, start_date, end_date, lag_hours=48.0):
+    """Reproduce the pre-m/s-fix checkpoint filename, which carried no wind unit."""
+    from haze_pipelines.ingest_weather import _coord_token
+
+    return checkpoint_dir / (
+        f"era5-{station['station_id']}-"
+        f"lat{_coord_token(station['latitude'])}-lon{_coord_token(station['longitude'])}-"
+        f"{start_date.replace('-', '')}-{end_date.replace('-', '')}-"
+        f"lag{_lag_token(lag_hours)}h.parquet"
+    )
+
+
+def _daily_payload(latitude, longitude, days, wind):
+    return {
+        "latitude": latitude,
+        "longitude": longitude,
+        "daily": {
+            "time": days,
+            "temperature_2m_max": [20.0] * len(days),
+            "precipitation_sum": [1.0] * len(days),
+            "relative_humidity_2m_mean": [70.0] * len(days),
+            "wind_speed_10m_max": [wind] * len(days),
+        },
+    }
+
+
+def _write_legacy_kmh_checkpoint(path, station, days):
+    """Write a checkpoint exactly as the pre-fix code did, with km/h wind values."""
+    frame = normalize_station_payload(
+        _daily_payload(station["latitude"], station["longitude"], days, 18.0),
+        station["station_id"],
+        availability_lag_hours=48.0,
+    )
+    write_parquet(
+        frame,
+        path,
+        extra_metadata={"dataset": "weather_observations_partial"},
+    )
+
+
+def test_resume_refetches_legacy_kmh_era5_checkpoint_in_ms(tmp_path):
+    # A checkpoint written before the m/s fix holds km/h numbers. Its identity
+    # must not match an m/s request, so a resume refetches instead of silently
+    # returning wind 3.6x too large.
+    checkpoint_dir = tmp_path / "partial"
+    checkpoint_dir.mkdir()
+    station = {"station_id": "STN-A", "label": "A", "latitude": -2.0, "longitude": 113.0}
+    days = ["2026-01-01", "2026-01-02"]
+    legacy = _legacy_era5_checkpoint(checkpoint_dir, station, days[0], days[-1])
+    _write_legacy_kmh_checkpoint(legacy, station, days)
+
+    assert pd.read_parquet(legacy)["wind_max_ms"].tolist() == [18.0, 18.0]
+
+    client = _UnitAwareWeatherClient()
+    df, _ = ingest_stations(
+        [station],
+        days[0],
+        days[-1],
+        tmp_path / "weather.parquet",
+        settings_obj=Settings(data_dir=tmp_path),
+        client=client,
+        checkpoint_dir=checkpoint_dir,
+    )
+
+    assert df["wind_max_ms"].tolist() == [5.0, 5.0]
+    assert len(client.calls) == 1, "a legacy km/h checkpoint must be refetched"
+    assert client.calls[0]["wind_speed_unit"] == "ms"
+    assert legacy.exists()
+    assert len(list(checkpoint_dir.glob("era5-*-windms.parquet"))) == 1
+
+
+def test_resume_does_not_blend_legacy_kmh_and_current_ms_checkpoints(tmp_path):
+    # One legacy and one current checkpoint in the same directory: only the
+    # legacy station is refetched, and no km/h value survives into wind_max_ms.
+    checkpoint_dir = tmp_path / "partial"
+    checkpoint_dir.mkdir()
+    days = ["2026-01-01", "2026-01-02"]
+    legacy_station = {
+        "station_id": "STN-LEGACY",
+        "label": "legacy",
+        "latitude": -2.0,
+        "longitude": 113.0,
+    }
+    current_station = {
+        "station_id": "STN-CURRENT",
+        "label": "current",
+        "latitude": 0.0,
+        "longitude": 116.0,
+    }
+    legacy = _legacy_era5_checkpoint(
+        checkpoint_dir, legacy_station, days[0], days[-1]
+    )
+    _write_legacy_kmh_checkpoint(legacy, legacy_station, days)
+
+    current = _checkpoint_path(
+        checkpoint_dir, current_station, days[0], days[-1], 48.0
+    )
+    current_frame = normalize_station_payload(
+        _daily_payload(
+            current_station["latitude"],
+            current_station["longitude"],
+            days,
+            5.0,
+        ),
+        current_station["station_id"],
+        availability_lag_hours=48.0,
+    )
+    write_parquet(
+        current_frame,
+        current,
+        extra_metadata={"dataset": "weather_observations_partial", "wind_speed_unit": "ms"},
+    )
+
+    client = _UnitAwareWeatherClient()
+    df, _ = ingest_stations(
+        [legacy_station, current_station],
+        days[0],
+        days[-1],
+        tmp_path / "weather.parquet",
+        settings_obj=Settings(data_dir=tmp_path),
+        client=client,
+        checkpoint_dir=checkpoint_dir,
+    )
+
+    assert 18.0 not in df["wind_max_ms"].tolist()
+    assert len(client.calls) == 1, "only the legacy station may be refetched"
+    assert client.calls[0]["wind_speed_unit"] == "ms"
+    by_station = df.groupby("station_id")["wind_max_ms"].apply(list).to_dict()
+    assert by_station == {
+        "STN-CURRENT": [5.0, 5.0],
+        "STN-LEGACY": [5.0, 5.0],
+    }
 
 
 def test_weather_checkpoint_is_keyed_by_date_range_and_coordinates(tmp_path):
