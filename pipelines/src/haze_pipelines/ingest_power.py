@@ -223,7 +223,6 @@ def ingest_stations(
             frames.append(pd.read_parquet(checkpoint_path))
             continue
 
-        fetched_at = clock()
         payload = fetch_power_daily(
             station["latitude"],
             station["longitude"],
@@ -231,6 +230,12 @@ def ingest_stations(
             end_date,
             client=client,
             max_retries=max_retries,
+        )
+        fetched_at = pd.Timestamp(clock())
+        fetched_at = (
+            fetched_at.tz_localize("UTC")
+            if fetched_at.tzinfo is None
+            else fetched_at.tz_convert("UTC")
         )
         frame = normalize_power_payload(
             payload,

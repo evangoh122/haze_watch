@@ -156,6 +156,61 @@ class _ParamWeatherClient:
         return None
 
 
+class _UnitAwareWeatherClient:
+    """An Open-Meteo archive client that honours the requested wind unit.
+
+    Open-Meteo defaults to km/h and only returns m/s when asked. Model the same
+    wind as 18 km/h or 5 m/s so a missing unit request shows up as a wrong value,
+    not just a missing parameter.
+    """
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    def get(self, url: str, **kwargs: object) -> _FakeResponse:
+        params = kwargs.get("params") or {}
+        self.calls.append(dict(params))
+        days = [
+            day.strftime("%Y-%m-%d")
+            for day in pd.date_range(params["start_date"], params["end_date"])
+        ]
+        wind = 5.0 if params.get("wind_speed_unit") == "ms" else 18.0
+        return _FakeResponse(
+            {
+                "latitude": params["latitude"],
+                "longitude": params["longitude"],
+                "daily": {
+                    "time": days,
+                    "temperature_2m_max": [20.0] * len(days),
+                    "precipitation_sum": [1.0] * len(days),
+                    "relative_humidity_2m_mean": [70.0] * len(days),
+                    "wind_speed_10m_max": [wind] * len(days),
+                },
+            }
+        )
+
+    def close(self) -> None:
+        return None
+
+
+def test_ingest_requests_wind_speed_in_metres_per_second(tmp_path):
+    client = _UnitAwareWeatherClient()
+    station = {"station_id": "STN-A", "label": "A", "latitude": -2.0, "longitude": 113.0}
+
+    df, _ = ingest_stations(
+        [station],
+        "2026-01-01",
+        "2026-01-02",
+        tmp_path / "weather.parquet",
+        settings_obj=Settings(data_dir=tmp_path),
+        client=client,
+    )
+
+    assert client.calls
+    assert df["wind_max_ms"].tolist() == [5.0, 5.0]
+    assert all(call["wind_speed_unit"] == "ms" for call in client.calls)
+
+
 def test_weather_checkpoint_is_keyed_by_date_range_and_coordinates(tmp_path):
     settings_obj = Settings(data_dir=tmp_path)
     checkpoint_dir = tmp_path / "partial"

@@ -3,6 +3,8 @@
 Public, key-free source (https://open-meteo.com/). Daily aggregates are used to
 keep datasets portable. Daily values are treated as available 48 hours after the
 observation day (conservative reanalysis latency) for point-in-time correctness.
+Wind is requested in m/s (``wind_speed_unit=ms``) to match ``wind_max_ms``;
+Open-Meteo otherwise defaults to km/h.
 """
 
 from __future__ import annotations
@@ -145,6 +147,7 @@ def fetch_station_daily(
         "end_date": end_date,
         "daily": ",".join(DAILY_VARS),
         "timezone": "UTC",
+        "wind_speed_unit": "ms",
     }
     own_client = client is None
     client = client or httpx.Client(timeout=120.0)

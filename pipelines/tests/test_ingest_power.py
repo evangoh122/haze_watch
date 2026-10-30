@@ -9,6 +9,7 @@ from haze_pipelines.ingest_firms import normalize_firms
 from haze_pipelines.ingest_polygons import normalize_polygons
 from haze_pipelines.ingest_power import ingest_stations, normalize_power_payload
 from haze_pipelines.ingest_weather import CANONICAL_COLUMNS
+from haze_pipelines.io import read_geo_metadata
 from haze_pipelines.provenance import read_registry
 
 POWER_JSON = {
@@ -430,6 +431,63 @@ def test_power_checkpoint_cache_hit_preserves_original_fetch_time(tmp_path):
     assert not rerun_client.calls, "same rule must hit the checkpoint"
     assert (first["available_time"] == FETCHED).all()
     assert (rerun["available_time"] == FETCHED).all()
+
+
+class _AdvancingPowerClient:
+    """A POWER client whose response mutates the clock, crossing the cutoff."""
+
+    def __init__(self, payload: dict, clock: _Clock, response_time: pd.Timestamp) -> None:
+        self._payload = payload
+        self._clock = clock
+        self._response_time = response_time
+        self.calls = 0
+
+    def get(self, url: str, **kwargs: object) -> _FakeResponse:
+        self.calls += 1
+        self._clock.now = self._response_time
+        return _FakeResponse(self._payload)
+
+    def close(self) -> None:
+        return None
+
+
+class _MutableClock:
+    def __init__(self, now: pd.Timestamp) -> None:
+        self.now = now
+
+    def __call__(self) -> pd.Timestamp:
+        return self.now
+
+
+def test_power_fetch_time_is_captured_after_the_http_response(tmp_path):
+    # The request starts just inside the 30-day cutoff; the response arrives just
+    # outside it. The row is a backfill row at the response time, so its
+    # availability and the persisted fetched_at must be the response time, not
+    # the request start.
+    checkpoint_dir = tmp_path / "partial"
+    out = tmp_path / "weather.parquet"
+    station = {"station_id": "POWER-1", "latitude": -0.08, "longitude": 116.32}
+    request_time = pd.Timestamp("2026-10-30T23:59:59", tz="UTC")
+    response_time = pd.Timestamp("2026-10-31T00:00:01", tz="UTC")
+    clock = _MutableClock(request_time)
+    client = _AdvancingPowerClient(_two_day_payload("20261001"), clock, response_time)
+
+    df, _ = ingest_stations(
+        [station],
+        "2026-10-01",
+        "2026-10-01",
+        out,
+        settings_obj=Settings(data_dir=tmp_path),
+        client=client,
+        pause_seconds=0,
+        checkpoint_dir=checkpoint_dir,
+        clock=clock,
+    )
+
+    assert client.calls == 1
+    assert df.iloc[0]["available_time"] == response_time
+    checkpoint = next(checkpoint_dir.glob("power-*.parquet"))
+    assert read_geo_metadata(checkpoint)["fetched_at"] == response_time.isoformat()
 
 
 def test_power_checkpoint_is_keyed_by_near_real_time_cutoff(tmp_path):
