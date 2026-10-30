@@ -92,7 +92,6 @@ def _cmd_ingest_weather(args: argparse.Namespace) -> int:
         pause_seconds=args.pause,
         max_retries=args.retries,
         checkpoint_dir=Path(args.checkpoint_dir) if args.checkpoint_dir else None,
-        near_real_time_days=args.near_real_time_days,
     )
     print(f"ingested {len(df)} station-days over {len(stations)} stations -> {out}")
     return 0
