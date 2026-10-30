@@ -10,13 +10,17 @@ the source explicitly. Missing values are returned as ``-999.0`` and are mapped
 to NaN, never treated as observations.
 
 Point-in-time vintage: MERRA-2 values for old days are revised by NASA months
-after the fact, so a backfill fetched today must not claim the values were
-known ``obs + lag`` ago. Rows older than ``near_real_time_days`` at fetch time
-are stamped ``available_time = max(obs + lag, fetched_at)`` (UTC fetch time);
-only rows inside the near-real-time window keep ``obs + lag``. The stamp is
+after the fact, and the current POWER archive does not expose a verifiable
+per-value publication time. A row observed 29 days ago can still carry a
+revision NASA published yesterday, so neither the observation date nor a
+"recent enough" cutoff can prove the exact value was known ``obs + lag`` ago.
+Ingestion is therefore fail-closed: **every** fetched row is stamped
+``available_time = max(obs + lag, fetched_at)``, where ``fetched_at`` is the UTC
+time of the successful HTTP response. This never hides a value from as-of
+builds after the fetch, but no earlier as-of build can see it. The stamp is
 stored in the cached checkpoint frame, so a cache hit keeps the original fetch
-time, and the checkpoint key carries the cutoff so a changed rule never reuses
-a stale checkpoint.
+time. The checkpoint key carries a fail-closed rule marker (not a cutoff), so
+checkpoints written under the old cutoff rule are never reused.
 
 Usage:
     haze-pipelines ingest-power --stations data/raw/weather/era5_coverage_5.csv \
@@ -39,9 +43,10 @@ from .io import write_parquet
 API_URL = "https://power.larc.nasa.gov/api/temporal/daily/point"
 POWER_VARS = ("T2M_MAX", "PRECTOTCORR", "RH2M", "WS10M_MAX")
 MISSING = -999.0
-# Rows whose observation day is within this many days of the fetch time are
-# treated as near-real-time (available at obs + lag); older rows are backfill.
-DEFAULT_NEAR_REAL_TIME_DAYS = 30.0
+# Marker in checkpoint names. It is deliberately not a cutoff: the rule is that
+# every fetched row waits for the successful fetch time, so checkpoints keyed by
+# an old cutoff value must never match.
+CHECKPOINT_VINTAGE_RULE = "vintagefailclosed"
 
 POWER_NOTE = (
     "NASA POWER / MERRA-2 daily reanalysis (fallback when the free Open-Meteo "
@@ -60,7 +65,6 @@ def _checkpoint_path(
     start_date: str,
     end_date: str,
     lag_hours: float,
-    near_real_time_days: float = DEFAULT_NEAR_REAL_TIME_DAYS,
 ) -> Path:
     """A checkpoint is only valid for one source, point, window, lag and vintage rule."""
     return checkpoint_dir / (
@@ -68,7 +72,7 @@ def _checkpoint_path(
         f"lat{_coord_token(station['latitude'])}-lon{_coord_token(station['longitude'])}-"
         f"{_day_key(start_date)}-{_day_key(end_date)}-"
         f"lag{_lag_token(lag_hours)}h-"
-        f"vintage{_lag_token(near_real_time_days)}d.parquet"
+        f"{CHECKPOINT_VINTAGE_RULE}.parquet"
     )
 
 
@@ -122,17 +126,16 @@ def normalize_power_payload(
     longitude: float | None = None,
     availability_lag_hours: float | None = None,
     fetched_at: pd.Timestamp | None = None,
-    near_real_time_days: float = DEFAULT_NEAR_REAL_TIME_DAYS,
 ) -> pd.DataFrame:
     """Normalize a NASA POWER daily payload to the canonical weather schema.
 
-    ``fetched_at`` (UTC, default now) is the snapshot time. Rows older than
-    ``near_real_time_days`` at that time are backfill and get
-    ``available_time = max(obs + lag, fetched_at)``; newer rows get ``obs + lag``.
+    ``fetched_at`` (UTC, default now) is the snapshot time of the successful
+    response. POWER exposes no verifiable per-value vintage, so **all** rows get
+    ``available_time = max(obs + lag, fetched_at)``; an earlier ``as_of`` must
+    never see a value that may have been revised after its observation day.
     """
     fetched = pd.Timestamp.now(tz="UTC") if fetched_at is None else pd.Timestamp(fetched_at)
     fetched = fetched.tz_localize("UTC") if fetched.tzinfo is None else fetched.tz_convert("UTC")
-    backfill_before = fetched - pd.to_timedelta(near_real_time_days, unit="D")
     parameters = (payload.get("properties") or {}).get("parameter") or {}
     if not parameters:
         return pd.DataFrame(columns=CANONICAL_COLUMNS)
@@ -162,9 +165,7 @@ def normalize_power_payload(
         if all(value in (None, MISSING) for value in values.values()):
             continue  # NASA POWER tail rows can be entirely missing
         obs = pd.Timestamp(day, tz="UTC")
-        available = obs + pd.to_timedelta(lag, unit="h")
-        if obs < backfill_before:
-            available = max(available, fetched)
+        available = max(obs + pd.to_timedelta(lag, unit="h"), fetched)
         rows.append(
             {
                 "station_id": station_id,
@@ -198,7 +199,6 @@ def ingest_stations(
     pause_seconds: float = 1.0,
     max_retries: int = 5,
     checkpoint_dir: Path | None = None,
-    near_real_time_days: float = DEFAULT_NEAR_REAL_TIME_DAYS,
     clock: Callable[[], pd.Timestamp] = lambda: pd.Timestamp.now(tz="UTC"),
 ) -> tuple[pd.DataFrame, Path]:
     """Fetch and normalize daily MERRA-2 weather for a list of points."""
@@ -214,7 +214,6 @@ def ingest_stations(
                 start_date,
                 end_date,
                 settings_obj.weather_availability_lag_hours,
-                near_real_time_days,
             )
             if checkpoint_dir is not None
             else None
@@ -244,7 +243,6 @@ def ingest_stations(
             longitude=station["longitude"],
             availability_lag_hours=settings_obj.weather_availability_lag_hours,
             fetched_at=fetched_at,
-            near_real_time_days=near_real_time_days,
         )
         if checkpoint_path is not None:
             write_parquet(

@@ -47,9 +47,9 @@ versioned FIRMS archive (MODIS 2000+, VIIRS 2012+, per sensor and year, 60 files
 panel. The weather panel uses NASA POWER/MERRA-2 because the free Open-Meteo
 ERA5 archive quota blocked the full sweep; the ERA5 ingest path is retained.
 The weather and haze joins are point-in-time safe and feed `environmental_features`.
-NASA POWER/MERRA-2 backfill rows (older than `--near-real-time-days`, default 30, at fetch time)
-get `available_time` = the UTC fetch time rather than observation + 48 h, because NASA revises
-reanalysis values later; an earlier `--as-of` therefore never sees values that did not yet exist.
+Every NASA POWER/MERRA-2 row gets `available_time = max(observation + 48 h, UTC fetch time)`
+because the archive exposes no verifiable per-value vintage and NASA revises reanalysis values
+later; an earlier `--as-of` therefore never sees values that may not have existed yet.
 What is still absent is model evaluation results and finished credit/insurance
 analytics — ML phases are unimplemented and the financial side stays synthetic.
 Status will be updated as phases land.

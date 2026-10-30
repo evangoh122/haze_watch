@@ -144,12 +144,15 @@ Caveats (this build of the extension):
 - **Point-in-time correctness**: features and exposure use only rows whose
   `available_time <= as_of` (FIRMS lag 3h, weather lag 48h). Unit tests prove
   future rows can never leak into features. NASA POWER/MERRA-2 values are revised
-  by NASA months later, so `ingest-power` stamps backfill rows (observed more than
-  `--near-real-time-days`, default 30, before the fetch) with
-  `available_time = max(obs + 48h, fetch time UTC)`; only near-real-time rows keep
-  `obs + 48h`. The stamp is stored in the checkpoint, and the checkpoint filename
-  carries the cutoff (`vintage30d`), so reruns keep the original fetch time and a
-  changed rule never reuses a stale checkpoint.
+  by NASA months later and the POWER archive exposes no verifiable per-value
+  publication time, so `ingest-power` is fail-closed: **every** fetched row gets
+  `available_time = max(obs + 48h, successful response time UTC)`. An as-of build
+  before the fetch therefore never sees a value that NASA may have revised after
+  its observation day. The stamp is stored in the checkpoint, so reruns keep the
+  original fetch time. The checkpoint filename carries a fail-closed rule marker
+  (`vintagefailclosed`), so checkpoints written under the old 30-day cutoff rule
+  are never reused. `--near-real-time-days` is accepted for backwards
+  compatibility but is deprecated and ignored.
 - **Spatial correctness**: hotspot proximity is measured to the polygon boundary
   (0 inside; else distance to nearest edge), never to the centroid - correct for
   large or elongated concessions. Weather features come from the nearest station

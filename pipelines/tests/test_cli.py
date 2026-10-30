@@ -227,7 +227,7 @@ def test_ingest_weather_cli_runs_without_power_flag(tmp_path, monkeypatch, capsy
     assert "ingested 1 station-days" in capsys.readouterr().out
 
 
-def test_ingest_power_cli_passes_near_real_time_days(tmp_path, monkeypatch, capsys):
+def test_ingest_power_cli_treats_deprecated_cutoff_as_ignored(tmp_path, monkeypatch, capsys):
     from haze_pipelines import ingest_power
 
     seen: dict = {}
@@ -249,7 +249,9 @@ def test_ingest_power_cli_passes_near_real_time_days(tmp_path, monkeypatch, caps
         str(tmp_path / "p.parquet"),
     ]
     assert main(base) == 0
-    assert seen["near_real_time_days"] == 30.0
+    assert "near_real_time_days" not in seen
     assert main([*base, "--near-real-time-days", "7"]) == 0
-    assert seen["near_real_time_days"] == 7.0
-    assert "ingested 1 station-days" in capsys.readouterr().out
+    assert "near_real_time_days" not in seen
+    captured = capsys.readouterr()
+    assert "--near-real-time-days is deprecated and ignored" in captured.err
+    assert "ingested 1 station-days" in captured.out

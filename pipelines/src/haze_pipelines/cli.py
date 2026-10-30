@@ -125,6 +125,13 @@ def _cmd_ingest_power(args: argparse.Namespace) -> int:
 
     from .ingest_power import ingest_stations
 
+    if getattr(args, "near_real_time_days", None) is not None:
+        print(
+            "warning: --near-real-time-days is deprecated and ignored; NASA POWER "
+            "exposes no verifiable per-value vintage, so every fetched row is "
+            "stamped at the successful fetch time",
+            file=sys.stderr,
+        )
     stations_df = pd.read_csv(args.stations)
     stations = stations_df.to_dict("records")
     df, out = ingest_stations(
@@ -136,7 +143,6 @@ def _cmd_ingest_power(args: argparse.Namespace) -> int:
         pause_seconds=args.pause,
         max_retries=args.retries,
         checkpoint_dir=Path(args.checkpoint_dir) if args.checkpoint_dir else None,
-        near_real_time_days=args.near_real_time_days,
     )
     print(f"ingested {len(df)} station-days over {len(stations)} stations -> {out}")
     return 0
@@ -397,9 +403,9 @@ def build_parser(settings_obj: Settings) -> argparse.ArgumentParser:
     p.add_argument(
         "--near-real-time-days",
         type=float,
-        default=30.0,
-        help="rows older than this at fetch time are backfill: available_time = fetch time "
-        "(MERRA-2 is revised later); newer rows use obs + weather lag",
+        default=None,
+        help="deprecated and ignored: POWER exposes no per-value vintage, so every "
+        "fetched row is stamped available_time = max(obs + lag, successful fetch time)",
     )
     p.add_argument("--out", default=str(settings_obj.processed_dir / "weather.parquet"))
     p.set_defaults(func=_cmd_ingest_power)
