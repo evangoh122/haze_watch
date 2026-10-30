@@ -24,7 +24,7 @@ statements, bank exposures and insurance policies.
 | Area | Status |
 |---|---|
 | Repository structure and scaffolding | Done |
-| Geospatial ingestion pipeline (`pipelines/`) | **Done — 84 tests passing** |
+| Geospatial ingestion pipeline (`pipelines/`) | **Done — test suite passing** |
 | FIRMS 25-year detection archive (2000-2026) | **Done — 9.6M detections in per-sensor/year GeoParquet** |
 | Weather panel (NASA POWER/MERRA-2, 1981-2026) | **Done — 5-point coverage set, 83,625 station-days** |
 | Haze/aerosol panel (CAMS, 2022-2026) | **Done — 121-point grid, 182,710 point-days** |

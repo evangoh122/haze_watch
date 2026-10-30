@@ -23,8 +23,9 @@ The source is the LIVE PortfolioHome.tsx from the evangoh.com site repo
 (egoh33/Auditable-Filing-QA). Pass --source, or set PORTFOLIO_HOME_SRC.
 
 Stats shown on the card are project-verified facts only (300 real concession
-polygons from the BNPB/GFW sample run, 24-72h forecast horizons, 90 pipeline
-tests measured via `uv run pytest pipelines/tests`). No invented metrics, per
+polygons from the BNPB/GFW sample run, 24-72h forecast horizons, and the
+pipeline test suite measured via `uv run pytest pipelines/tests`). No invented
+metrics, per
 the portfolio's own disclaimer rules.
 """
 
@@ -84,8 +85,8 @@ CARD = """            <div
                       <div className="text-[10px] text-secondary/70">hazard horizons</div>
                     </div>
                     <div className="bg-white/[0.035] border border-white/[0.06] rounded-lg p-3">
-                      <div className="text-sm font-mono font-semibold text-accent-bright">90</div>
-                      <div className="text-[10px] text-secondary/70">pipeline tests</div>
+                      <div className="text-sm font-mono font-semibold text-accent-bright">pytest</div>
+                      <div className="text-[10px] text-secondary/70">pipeline test suite</div>
                     </div>
                   </div>
                 </div>

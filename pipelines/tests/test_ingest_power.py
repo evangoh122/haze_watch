@@ -193,6 +193,54 @@ def test_power_checkpoint_is_keyed_by_date_range_and_coordinates(tmp_path):
     assert len(list(checkpoint_dir.glob("power-*.parquet"))) == 3
 
 
+def test_power_checkpoint_distinguishes_sub_millidegree_coordinates(tmp_path):
+    # A stable station ID must not make two requests below four-decimal
+    # precision share a checkpoint and silently return the first point's rows.
+    checkpoint_dir = tmp_path / "partial"
+    out = tmp_path / "weather.parquet"
+    base = {"station_id": "STABLE", "latitude": -2.00001, "longitude": 113.00001}
+    lat_moved = {**base, "latitude": -2.00002}
+    lon_moved = {**base, "latitude": -2.00002, "longitude": 113.00002}
+
+    def run(station: dict, client: _ParamPowerClient) -> pd.DataFrame:
+        df, _ = ingest_stations(
+            [station],
+            "2023-01-01",
+            "2023-01-02",
+            out,
+            settings_obj=Settings(data_dir=tmp_path),
+            client=client,
+            pause_seconds=0,
+            checkpoint_dir=checkpoint_dir,
+        )
+        return df
+
+    first_client = _ParamPowerClient()
+    first = run(base, first_client)
+    assert len(first_client.calls) == 1
+    assert first["latitude"].unique().tolist() == [-2.00001]
+    assert first["longitude"].unique().tolist() == [113.00001]
+
+    lat_client = _ParamPowerClient()
+    lat = run(lat_moved, lat_client)
+    assert lat_client.calls, "a changed latitude must not reuse the first checkpoint"
+    assert lat["latitude"].unique().tolist() == [-2.00002]
+    assert lat["longitude"].unique().tolist() == [113.00001]
+
+    lon_client = _ParamPowerClient()
+    lon = run(lon_moved, lon_client)
+    assert lon_client.calls, "a changed longitude must not reuse the earlier checkpoint"
+    assert lon["latitude"].unique().tolist() == [-2.00002]
+    assert lon["longitude"].unique().tolist() == [113.00002]
+
+    reuse_client = _ParamPowerClient()
+    reused = run(lon_moved, reuse_client)
+    assert not reuse_client.calls, "an identical request must reuse its checkpoint"
+    assert reused["latitude"].unique().tolist() == [-2.00002]
+    assert reused["longitude"].unique().tolist() == [113.00002]
+    assert len(list(checkpoint_dir.glob("power-*.parquet"))) == 3
+
+
 def test_power_checkpoint_is_keyed_by_availability_lag(tmp_path):
     checkpoint_dir = tmp_path / "partial"
     out = tmp_path / "weather.parquet"

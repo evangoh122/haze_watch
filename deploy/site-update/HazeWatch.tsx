@@ -387,8 +387,8 @@ export default function HazeWatch() {
               <div className="text-[11px] text-secondary/70 mt-1">hazard horizons</div>
             </div>
             <div className="rounded-2xl border border-border/60 bg-surface/60 p-5 text-center">
-              <div className="text-2xl font-mono font-semibold text-accent-bright">90</div>
-              <div className="text-[11px] text-secondary/70 mt-1">pipeline tests</div>
+              <div className="text-2xl font-mono font-semibold text-accent-bright">pytest</div>
+              <div className="text-[11px] text-secondary/70 mt-1">pipeline test suite</div>
             </div>
           </div>
         </section>

@@ -23,7 +23,7 @@ import httpx
 import pandas as pd
 
 from .config import Settings, settings
-from .ingest_weather import CANONICAL_COLUMNS, _lag_token
+from .ingest_weather import CANONICAL_COLUMNS, _coord_token, _lag_token
 from .io import write_parquet
 
 API_URL = "https://power.larc.nasa.gov/api/temporal/daily/point"
@@ -51,7 +51,7 @@ def _checkpoint_path(
     """A checkpoint is only valid for one source, point, window and availability lag."""
     return checkpoint_dir / (
         f"power-{station['station_id']}-"
-        f"{float(station['latitude']):.4f}-{float(station['longitude']):.4f}-"
+        f"lat{_coord_token(station['latitude'])}-lon{_coord_token(station['longitude'])}-"
         f"{_day_key(start_date)}-{_day_key(end_date)}-"
         f"lag{_lag_token(lag_hours)}h.parquet"
     )

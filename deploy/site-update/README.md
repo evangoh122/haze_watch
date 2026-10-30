@@ -42,8 +42,8 @@ provenance-registered:
 The case-study page now marks weather and haze as complete panels, keeps
 2015/2019 haze explicitly open (pre-2022 needs NASA Earthdata), and reframes
 "in progress" around peat/land-cover, the event study and the financial join.
-The deck card moves from **75** to **90** pipeline tests and names CAMS haze
-alongside FIRMS and ERA5.
+The deck card cites the pipeline test suite (no fixed count) and names CAMS
+haze alongside FIRMS and ERA5.
 
 The page file here (`HazeWatch.tsx`) is the reviewable source; the live site is
 the separate `egoh33/Auditable-Filing-QA` Space, so deploy it with the same
@@ -141,11 +141,10 @@ synthetic commercial data labeled; hazard scores are baselines; detections are
 not burned area).
 
 Card claims are project-verified facts only: 300 real concession polygons
-(BNPB/GFW sample run), 24-72h hazard horizons, 90 pipeline tests (measured via
-`uv run python -m pytest pipelines/tests`). No invented metrics. The test count
-was corrected from 68 to 75 after the FIRMS long-backfill retry/checkpoint/backoff
-work, then to 84 after the weather coverage/haze-feature work, and to 90 after
-the PR #20 regression tests.
+(BNPB/GFW sample run), 24-72h hazard horizons, and the pipeline test suite
+(measured via `uv run python -m pytest pipelines/tests`). No invented metrics
+and no fixed test count, because the collected-case total changes whenever a
+test is added.
 
 ## Deck CSS (`frontend/src/index.css`)
 

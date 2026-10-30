@@ -1,6 +1,6 @@
 # Data Pipeline
 
-> Status: **implemented and tested** (84 unit/integration tests passing). Forecasting
+> Status: **implemented and tested** (pipeline test suite passing). Forecasting
 > is a labeled baseline; ML models arrive in Phase 2.
 
 Package: `pipelines/` (installable as `haze-pipelines`, uv workspace member).

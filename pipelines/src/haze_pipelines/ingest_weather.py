@@ -51,6 +51,16 @@ def _day_key(value: str) -> str:
     return value.replace("-", "")
 
 
+def _coord_token(value: float) -> str:
+    """Serialize a coordinate losslessly for a checkpoint filename.
+
+    ``:.4f`` rounded distinct points (``-2.00001`` and ``-2.00002``) into the
+    same key. The shortest round-trip repr keeps every distinct float distinct;
+    digits, ``-``, ``.``, ``e`` and ``+`` are all filesystem-safe.
+    """
+    return repr(float(value))
+
+
 def _lag_token(lag_hours: float) -> str:
     """Serialize an availability lag losslessly for a checkpoint filename.
 
@@ -72,7 +82,7 @@ def _checkpoint_path(
     """A checkpoint is only valid for one source, point, window and availability lag."""
     return checkpoint_dir / (
         f"era5-{station['station_id']}-"
-        f"{float(station['latitude']):.4f}-{float(station['longitude']):.4f}-"
+        f"lat{_coord_token(station['latitude'])}-lon{_coord_token(station['longitude'])}-"
         f"{_day_key(start_date)}-{_day_key(end_date)}-"
         f"lag{_lag_token(lag_hours)}h.parquet"
     )
