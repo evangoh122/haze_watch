@@ -7,8 +7,8 @@ infrastructure unless measurable latency requirements justify it.
 |---|---|---|
 | Fixture hotspots (testing) | `haze-pipelines make-fixture-hotspots` | labeled synthetic CSV |
 | Fire hotspots | `haze-pipelines ingest-firms [--fixture]` (API history: `--from-api --start-date ... --backfill-days ...`) | `data/processed/fire_hotspots.parquet` |
-| Weather | `haze-pipelines ingest-weather` | `data/processed/weather.parquet` |
-| Haze/aerosol | `haze-pipelines ingest-aerosol --start ... --end ...` | `data/processed/haze_aerosol.parquet` |
+| Weather | `haze-pipelines ingest-weather` (ERA5) or `ingest-power` (NASA POWER/MERRA-2 fallback) | `data/processed/weather.parquet` |
+| Haze/aerosol | `haze-pipelines ingest-aerosol --bbox ... --grid ... --start ... --end ...` | `data/processed/haze_aerosol.parquet` |
 | Concessions fetch | `haze-pipelines fetch-concessions --source bnpb\|gfw\|gfw-peatlands` | GeoJSON (license gate) |
 | Concessions normalize | `haze-pipelines ingest-polygons` | `data/processed/plantation_polygons.parquet` |
 | Features | `haze-pipelines build-features` | `data/processed/environmental_features.parquet` |
@@ -20,6 +20,6 @@ Common requirements for every job:
 
 - Normalize CRS to EPSG:4326 and timestamps to UTC on ingest.
 - Record dataset provenance (see `data/metadata/datasets.yaml`).
-- Store both `observation_time` and `available_time` for observations used in training.
+- Store both `observation_time` and `available_time` for observations used in training.  Reanalysis backfills (NASA POWER) are stamped with the fetch time, not obs + lag.
 - Deduplicate hotspots and validate polygon geometry (see testing plan in
   `project_profile.md` section 11).

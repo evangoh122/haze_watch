@@ -51,6 +51,7 @@ export default function PortfolioHome() {
       tabIndex: 0,
       'aria-label': `Show ${PROJECT_TITLES[index]}`,
       onClick: () => setActiveProject(index),
+      onKeyDown: (event) => activateCardOnKeyDown(event, () => setActiveProject(index)),
     };
   };
   const onDeckKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -84,6 +85,12 @@ export default function PortfolioHome() {
     dragged.current = false;
     event.preventDefault();
     event.stopPropagation();
+  };
+  const onDeckPointerCancel = () => {
+    // A cancelled pointer is not a completed swipe and emits no click, so clear
+    // the suppression flag; a later keyboard-generated click must not be eaten.
+    dragFrom.current = null;
+    dragged.current = false;
   };
   const landingTour = useTour(LANDING_TOUR_KEY);
   const activateCardOnKeyDown = (event: KeyboardEvent<HTMLDivElement>, action: () => void) => {
@@ -239,7 +246,7 @@ export default function PortfolioHome() {
               onKeyDown={onDeckKeyDown}
               onPointerDown={onDeckPointerDown}
               onPointerUp={onDeckPointerUp}
-              onPointerCancel={onDeckPointerUp}
+              onPointerCancel={onDeckPointerCancel}
               onClickCapture={onDeckClickCapture}
             >
               <div className="haze-deck-card" data-offset={deckOffset(0)} {...deckCardProps(0)}>
@@ -376,8 +383,8 @@ export default function PortfolioHome() {
                       <div className="text-[10px] text-secondary/70">hazard horizons</div>
                     </div>
                     <div className="bg-white/[0.035] border border-white/[0.06] rounded-lg p-3">
-                      <div className="text-sm font-mono font-semibold text-accent-bright">75</div>
-                      <div className="text-[10px] text-secondary/70">pipeline tests</div>
+                      <div className="text-sm font-mono font-semibold text-accent-bright">pytest</div>
+                      <div className="text-[10px] text-secondary/70">pipeline test suite</div>
                     </div>
                   </div>
                 </div>
@@ -392,7 +399,7 @@ export default function PortfolioHome() {
                       <Flame size={13} />
                       Real fire observations
                     </div>
-                    <p className="text-[11px] text-secondary/70 m-0">NASA FIRMS detections and ERA5 weather joined to concession geography</p>
+                    <p className="text-[11px] text-secondary/70 m-0">NASA FIRMS detections, 1981-2026 reanalysis weather and CAMS haze joined to concession geography</p>
                   </div>
                   <div className="glass-sm p-3.5">
                     <div className="flex items-center gap-2 text-accent text-xs font-semibold mb-1">
@@ -562,3 +569,4 @@ export default function PortfolioHome() {
     </div>
   );
 }
+

@@ -3,16 +3,20 @@
 Public, key-free source (https://open-meteo.com/). Daily aggregates are used to
 keep datasets portable. Daily values are treated as available 48 hours after the
 observation day (conservative reanalysis latency) for point-in-time correctness.
+Wind is requested in m/s (``wind_speed_unit=ms``) to match ``wind_max_ms``;
+Open-Meteo otherwise defaults to km/h.
 """
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import httpx
 import pandas as pd
 
 from .config import Settings, settings
+from .geo import INDONESIA_BBOX
 from .io import write_parquet
 
 DAILY_VARS = [
@@ -34,6 +38,96 @@ CANONICAL_COLUMNS = [
     "wind_max_ms",
 ]
 
+# Marker in ERA5 checkpoint names. Older checkpoints were fetched with
+# Open-Meteo's default km/h while the canonical column is m/s, so their identity
+# must never match an m/s request; this marker makes a resume refetch them.
+CHECKPOINT_WIND_UNIT = "windms"
+
+
+def _coord_label(value: float, positive: str, negative: str) -> str:
+    """Label a coordinate without collapsing distinct points.
+
+    Whole degrees keep the short legacy form (``110E``); fractional values use the
+    shortest round-trip repr (``110.5E``) so no two distinct points share an ID.
+    """
+    magnitude = repr(abs(float(value))).removesuffix(".0")
+    return f"{magnitude}{positive if value >= 0 else negative}"
+
+
+def _day_key(value: str) -> str:
+    return value.replace("-", "")
+
+
+def _coord_token(value: float) -> str:
+    """Serialize a coordinate losslessly for a checkpoint filename.
+
+    ``:.4f`` rounded distinct points (``-2.00001`` and ``-2.00002``) into the
+    same key. The shortest round-trip repr keeps every distinct float distinct;
+    digits, ``-``, ``.``, ``e`` and ``+`` are all filesystem-safe.
+    """
+    return repr(float(value))
+
+
+def _lag_token(lag_hours: float) -> str:
+    """Serialize an availability lag losslessly for a checkpoint filename.
+
+    ``:g`` rounds to six significant digits, so 48.00001 and 48.00002 would share
+    a checkpoint. The shortest round-trip repr keeps them distinct; the trailing
+    ``.0`` is stripped so integer lags still produce ``lag48h``. Exponent forms
+    such as ``1e-05`` and ``1e+16`` are filesystem-safe and remain distinct.
+    """
+    return repr(float(lag_hours)).removesuffix(".0")
+
+
+def _checkpoint_path(
+    checkpoint_dir: Path,
+    station: dict,
+    start_date: str,
+    end_date: str,
+    lag_hours: float,
+) -> Path:
+    """A checkpoint is only valid for one source, point, window, lag and wind unit."""
+    return checkpoint_dir / (
+        f"era5-{station['station_id']}-"
+        f"lat{_coord_token(station['latitude'])}-lon{_coord_token(station['longitude'])}-"
+        f"{_day_key(start_date)}-{_day_key(end_date)}-"
+        f"lag{_lag_token(lag_hours)}h-"
+        f"{CHECKPOINT_WIND_UNIT}.parquet"
+    )
+
+
+def grid_stations(
+    bbox: tuple[float, float, float, float] = INDONESIA_BBOX,
+    grid: int = 6,
+) -> list[dict]:
+    """Build a regular ERA5 point grid as station rows.
+
+    ERA5 is a reanalysis grid, not a station network. A regular grid gives every
+    concession an auditable nearest point instead of stretching four distant
+    stations across the archipelago (the old demo used one station for 207 km to
+    824 km away). ``grid`` is the number of points per axis, inclusive.
+    """
+    if grid < 2:
+        raise ValueError("grid must be >= 2")
+    min_lon, min_lat, max_lon, max_lat = bbox
+    lons = [min_lon + i * (max_lon - min_lon) / (grid - 1) for i in range(grid)]
+    lats = [min_lat + i * (max_lat - min_lat) / (grid - 1) for i in range(grid)]
+    stations: list[dict] = []
+    for lat in lats:
+        for lon in lons:
+            station_id = (
+                f"ERA5-{_coord_label(lon, 'E', 'W')}-{_coord_label(lat, 'N', 'S')}"
+            )
+            stations.append(
+                {
+                    "station_id": station_id,
+                    "label": f"ERA5 grid point {lat:.2f},{lon:.2f}",
+                    "latitude": lat,
+                    "longitude": lon,
+                }
+            )
+    return stations
+
 
 def fetch_station_daily(
     latitude: float,
@@ -43,8 +137,15 @@ def fetch_station_daily(
     *,
     base_url: str | None = None,
     client: httpx.Client | None = None,
+    max_retries: int = 5,
+    retry_wait_seconds: float = 60.0,
 ) -> dict:
-    """Fetch daily reanalysis values for one point. Returns the raw JSON payload."""
+    """Fetch daily reanalysis values for one point. Returns the raw JSON payload.
+
+    Long archive requests are metered by Open-Meteo's minutely quota. A 429 is a
+    wait-and-retry signal, not a permanent failure; the caller also paces between
+    stations.
+    """
     params = {
         "latitude": latitude,
         "longitude": longitude,
@@ -52,13 +153,21 @@ def fetch_station_daily(
         "end_date": end_date,
         "daily": ",".join(DAILY_VARS),
         "timezone": "UTC",
+        "wind_speed_unit": "ms",
     }
     own_client = client is None
-    client = client or httpx.Client(timeout=60.0)
+    client = client or httpx.Client(timeout=120.0)
     try:
-        response = client.get(base_url or settings.open_meteo_archive_url, params=params)
-        response.raise_for_status()
-        return response.json()
+        for attempt in range(max_retries + 1):
+            response = client.get(
+                base_url or settings.open_meteo_archive_url, params=params, timeout=120.0
+            )
+            if getattr(response, "status_code", 200) == 429 and attempt < max_retries:
+                time.sleep(retry_wait_seconds)
+                continue
+            response.raise_for_status()
+            return response.json()
+        raise RuntimeError("unreachable: weather retry loop exhausted")
     finally:
         if own_client:
             client.close()
@@ -107,13 +216,36 @@ def ingest_stations(
     *,
     settings_obj: Settings = settings,
     client: httpx.Client | None = None,
+    pause_seconds: float = 0.0,
+    max_retries: int = 5,
+    checkpoint_dir: Path | None = None,
 ) -> tuple[pd.DataFrame, Path]:
     """Fetch and normalize daily weather for a list of stations.
 
     Each station dict: ``{"station_id", "label", "latitude", "longitude"}``.
+    With ``checkpoint_dir``, each completed station is written independently and
+    skipped on a rerun, so a quota failure costs one station rather than the run.
     """
+    if checkpoint_dir is not None:
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
     frames = []
-    for station in stations:
+    for index, station in enumerate(stations):
+        checkpoint_path = (
+            _checkpoint_path(
+                checkpoint_dir,
+                station,
+                start_date,
+                end_date,
+                settings_obj.weather_availability_lag_hours,
+            )
+            if checkpoint_dir is not None
+            else None
+        )
+        if checkpoint_path is not None and checkpoint_path.exists():
+            frames.append(pd.read_parquet(checkpoint_path))
+            continue
+
         payload = fetch_station_daily(
             station["latitude"],
             station["longitude"],
@@ -121,8 +253,25 @@ def ingest_stations(
             end_date,
             base_url=settings_obj.open_meteo_archive_url,
             client=client,
+            max_retries=max_retries,
         )
-        frames.append(normalize_station_payload(payload, station["station_id"]))
+        frame = normalize_station_payload(
+            payload,
+            station["station_id"],
+            availability_lag_hours=settings_obj.weather_availability_lag_hours,
+        )
+        if checkpoint_path is not None:
+            write_parquet(
+                frame,
+                checkpoint_path,
+                extra_metadata={
+                    "dataset": "weather_observations_partial",
+                    "wind_speed_unit": "ms",
+                },
+            )
+        frames.append(frame)
+        if index < len(stations) - 1 and pause_seconds > 0:
+            time.sleep(pause_seconds)
 
     df = (
         pd.concat(frames, ignore_index=True)

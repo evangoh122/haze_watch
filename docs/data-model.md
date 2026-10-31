@@ -17,7 +17,8 @@ Conventions:
 | Table | Purpose | Key columns |
 |---|---|---|
 | `fire_hotspots` | FIRMS VIIRS/MODIS active fire detections | hotspot_id, source, lat, lon, acq_time, available_time, frp, brightness, confidence, daynight |
-| `weather_observations` | ERA5 / Open-Meteo gridded weather | cell_id, time, temp, rh, wind_speed, wind_dir, precip, soil_moisture |
+| `weather_observations` | ERA5 / Open-Meteo gridded weather | station_id, lat, lon, observation_time, available_time, temp_max, precip, humidity, wind_max |
+| `haze_aerosol` | CAMS / Open-Meteo haze indicators (not fire detections) | grid_id, date, available_time, lat, lon, aod_mean, aod_max, pm2_5, pm10, source |
 | `land_cover` | Copernicus land cover / vegetation | geom, class_code, vintage, source |
 | `peatlands` | Peatland / soil characteristics | geom, peat_depth, vintage, source |
 | `concessions` | Published plantation/concession polygons | concession_id, geom, boundary_type, vintage, attribution_confidence, source, license |

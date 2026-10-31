@@ -15,12 +15,30 @@ datasets:
     notes: "Requires FIRMS API key. Record available_time per observation for leakage control."
 
   - name: era5_weather
-    source: Copernicus Climate Data Store (ERA5)
+    source: Copernicus Climate Data Store (ERA5) via Open-Meteo archive API
     license: TBD_CONFIRM_AT_ACQUISITION
     acquired_at: null
     spatial_resolution: "~0.25 deg"
     vintage: null
     treatment: real
+
+  - name: nasa_power_weather
+    source: NASA POWER daily point API (MERRA-2 reanalysis)
+    license: NASA POWER open data (attribution)
+    acquired_at: null
+    spatial_resolution: "0.5 x 0.625 deg"
+    vintage: null
+    treatment: real
+    notes: "Fallback when the free Open-Meteo ERA5 archive quota blocks a full sweep. MERRA-2 is not ERA5; -999 missing values are NaN."
+
+  - name: cams_haze_aerosol
+    source: CAMS via Open-Meteo Air Quality API
+    license: Copernicus CAMS attribution / Open-Meteo terms
+    acquired_at: null
+    spatial_resolution: "~50 km"
+    vintage: null
+    treatment: real
+    notes: "AOD/PM2.5/PM10, not fire detections. Archive starts 2022-08-31; pre-2022 needs NASA Earthdata."
 
   - name: copernicus_land_cover
     source: Copernicus Global Land Service

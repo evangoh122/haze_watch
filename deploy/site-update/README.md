@@ -24,6 +24,31 @@ opacity, filter, z-order, the reserved peek) are in the site's
 `frontend/src/index.css` (see "Deck CSS" below), because they work off the
 `data-offset` attribute the page writes.
 
+## 2026-10-19 - historical panels backfilled
+
+The `/haze-watch` page no longer says the weather panel is "next" or the haze
+panel is "partial depth". The core historical panels are now built and
+provenance-registered:
+
+- **Weather:** 5-point coverage set over 110-120E, 4S-6N, 1981-2026 history;
+  83,625 station-days. All 300 concessions are within 158 km of a coverage
+  point. The set is k-means over concession representative points. The delivered
+  panel uses NASA POWER/MERRA-2 because the free Open-Meteo ERA5 archive quota
+  blocked the full sweep; the ERA5 ingest path remains in `pipelines/`.
+- **Haze:** 121-point CAMS grid at 1 degree over the same region, 2022-08-31 to
+  2026-10-18; 182,710 point-days. All 300 concessions are within 75 km.
+- **Fire:** the existing 9.6M-detection FIRMS archive, 2000-2026.
+
+The case-study page now marks weather and haze as complete panels, keeps
+2015/2019 haze explicitly open (pre-2022 needs NASA Earthdata), and reframes
+"in progress" around peat/land-cover, the event study and the financial join.
+The deck card cites the pipeline test suite (no fixed count) and names CAMS
+haze alongside FIRMS and ERA5.
+
+The page file here (`HazeWatch.tsx`) is the reviewable source; the live site is
+the separate `egoh33/Auditable-Filing-QA` Space, so deploy it with the same
+single-file upload pattern as the card after approval.
+
 ## The edit
 
 Converts the "selected work" section to a **stacked card deck** - no carousel
@@ -116,10 +141,10 @@ synthetic commercial data labeled; hazard scores are baselines; detections are
 not burned area).
 
 Card claims are project-verified facts only: 300 real concession polygons
-(BNPB/GFW sample run), 24-72h hazard horizons, 75 pipeline tests (measured via
-`uv run pytest pipelines/tests`). No invented metrics. The test count was
-corrected from 68 to 75 after the FIRMS long-backfill retry/checkpoint/backoff
-work landed.
+(BNPB/GFW sample run), 24-72h hazard horizons, and the pipeline test suite
+(measured via `uv run python -m pytest pipelines/tests`). No invented metrics
+and no fixed test count, because the collected-case total changes whenever a
+test is added.
 
 ## Deck CSS (`frontend/src/index.css`)
 
@@ -138,6 +163,8 @@ utility quietly winning.
 
    Unlayered on purpose: layered utilities must not outrank these rules. */
 .haze-deck {
+  /* horizontal swipes belong to the carousel; vertical scroll and pinch zoom stay on */
+  touch-action: pan-y pinch-zoom;
   --deck-peek: 40px;
   --deck-peek-2: 80px;
   display: grid;
@@ -282,3 +309,4 @@ uv run python -c "from huggingface_hub import HfApi; HfApi().upload_file(
 ```
 
 Deploying the Space rebuilds it - that is the moment evangoh.com changes.
+

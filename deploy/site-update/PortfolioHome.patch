@@ -9,7 +9,7 @@
  import { useNavigate } from 'react-router-dom';
  import CoachMarks, { useTour } from '../components/CoachMarks';
  import { LANDING_TOUR, LANDING_TOUR_KEY } from '../components/tourSteps';
-@@ -28,8 +29,62 @@
+@@ -28,8 +29,69 @@
    </svg>
  );
  
@@ -35,6 +35,7 @@
 +      tabIndex: 0,
 +      'aria-label': `Show ${PROJECT_TITLES[index]}`,
 +      onClick: () => setActiveProject(index),
++      onKeyDown: (event) => activateCardOnKeyDown(event, () => setActiveProject(index)),
 +    };
 +  };
 +  const onDeckKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -69,10 +70,16 @@
 +    event.preventDefault();
 +    event.stopPropagation();
 +  };
++  const onDeckPointerCancel = () => {
++    // A cancelled pointer is not a completed swipe and emits no click, so clear
++    // the suppression flag; a later keyboard-generated click must not be eaten.
++    dragFrom.current = null;
++    dragged.current = false;
++  };
    const landingTour = useTour(LANDING_TOUR_KEY);
    const activateCardOnKeyDown = (event: KeyboardEvent<HTMLDivElement>, action: () => void) => {
      if (event.key !== 'Enter' && event.key !== ' ') return;
-@@ -60,6 +115,8 @@
+@@ -60,6 +122,8 @@
                href="https://www.linkedin.com/in/eevangoh/"
                target="_blank"
                rel="noopener noreferrer"
@@ -81,7 +88,7 @@
                className="text-secondary hover:text-primary transition-colors flex items-center gap-1.5"
              >
                <LinkedinIcon size={15} />
-@@ -78,6 +135,8 @@
+@@ -78,6 +142,8 @@
              </a>
              <a
                href="mailto:evangohsg@gmail.com"
@@ -90,7 +97,7 @@
                className="text-secondary hover:text-primary transition-colors flex items-center gap-1.5"
              >
                <Mail size={15} />
-@@ -170,13 +229,28 @@
+@@ -170,13 +236,28 @@
              </div>
            </div>
  
@@ -105,7 +112,7 @@
 +              onKeyDown={onDeckKeyDown}
 +              onPointerDown={onDeckPointerDown}
 +              onPointerUp={onDeckPointerUp}
-+              onPointerCancel={onDeckPointerUp}
++              onPointerCancel={onDeckPointerCancel}
 +              onClickCapture={onDeckClickCapture}
 +            >
 +              <div className="haze-deck-card" data-offset={deckOffset(0)} {...deckCardProps(0)}>
@@ -123,7 +130,7 @@
                className="product-glass-preview hover:border-accent/50 rounded-2xl transition-all duration-300 flex flex-col justify-between p-6 sm:p-8 relative group overflow-hidden cursor-pointer min-h-[520px]"
              >
                <div className="absolute top-0 right-0 w-40 h-40 bg-accent/10 rounded-full blur-3xl group-hover:bg-accent/15 transition-colors pointer-events-none" />
-@@ -255,99 +329,215 @@
+@@ -255,99 +336,215 @@
                  </span>
                </div>
              </div>
@@ -225,8 +232,8 @@
 +                      <div className="text-[10px] text-secondary/70">hazard horizons</div>
 +                    </div>
 +                    <div className="bg-white/[0.035] border border-white/[0.06] rounded-lg p-3">
-+                      <div className="text-sm font-mono font-semibold text-accent-bright">75</div>
-+                      <div className="text-[10px] text-secondary/70">pipeline tests</div>
++                      <div className="text-sm font-mono font-semibold text-accent-bright">pytest</div>
++                      <div className="text-[10px] text-secondary/70">pipeline test suite</div>
 +                    </div>
 +                  </div>
 +                </div>
@@ -254,7 +261,7 @@
 +                      <Flame size={13} />
 +                      Real fire observations
 +                    </div>
-+                    <p className="text-[11px] text-secondary/70 m-0">NASA FIRMS detections and ERA5 weather joined to concession geography</p>
++                    <p className="text-[11px] text-secondary/70 m-0">NASA FIRMS detections, 1981-2026 reanalysis weather and CAMS haze joined to concession geography</p>
 +                  </div>
 +                  <div className="glass-sm p-3.5">
 +                    <div className="flex items-center gap-2 text-accent text-xs font-semibold mb-1">
@@ -408,7 +415,7 @@
            </div>
          </section>
        </main>
-@@ -363,7 +553,7 @@
+@@ -363,7 +560,7 @@
              </div>
            </div>
            <p className="mt-2 text-[11px] text-secondary/40 leading-relaxed max-w-2xl text-center">

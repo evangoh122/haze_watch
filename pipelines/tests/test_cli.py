@@ -188,3 +188,70 @@ def test_fixture_chain_end_to_end(tmp_path, capsys, monkeypatch):
     assert entries, "CLI runs must register provenance"
     tmp_norm = str(tmp_path).replace("\\", "/")
     assert all(str(e["path"]).replace("\\", "/").startswith(tmp_norm) for e in entries)
+
+
+def _stations_csv(tmp_path):
+    path = tmp_path / "stations.csv"
+    pd.DataFrame(
+        {"station_id": ["S1"], "label": ["s1"], "latitude": [-2.0], "longitude": [113.0]}
+    ).to_csv(path, index=False)
+    return path
+
+
+def test_ingest_weather_cli_runs_without_power_flag(tmp_path, monkeypatch, capsys):
+    """ingest-weather must not read the POWER-only --near-real-time-days flag."""
+    from haze_pipelines import ingest_weather
+
+    seen: dict = {}
+
+    def fake_ingest(stations, start, end, out, **kwargs):
+        seen.update(kwargs)
+        return pd.DataFrame({"station_id": ["S1"]}), out
+
+    monkeypatch.setattr(ingest_weather, "ingest_stations", fake_ingest)
+    code = main(
+        [
+            "ingest-weather",
+            "--stations",
+            str(_stations_csv(tmp_path)),
+            "--start",
+            "2026-01-01",
+            "--end",
+            "2026-01-02",
+            "--out",
+            str(tmp_path / "w.parquet"),
+        ]
+    )
+    assert code == 0
+    assert "near_real_time_days" not in seen
+    assert "ingested 1 station-days" in capsys.readouterr().out
+
+
+def test_ingest_power_cli_treats_deprecated_cutoff_as_ignored(tmp_path, monkeypatch, capsys):
+    from haze_pipelines import ingest_power
+
+    seen: dict = {}
+
+    def fake_ingest(stations, start, end, out, **kwargs):
+        seen.update(kwargs)
+        return pd.DataFrame({"station_id": ["S1"]}), out
+
+    monkeypatch.setattr(ingest_power, "ingest_stations", fake_ingest)
+    base = [
+        "ingest-power",
+        "--stations",
+        str(_stations_csv(tmp_path)),
+        "--start",
+        "2026-01-01",
+        "--end",
+        "2026-01-02",
+        "--out",
+        str(tmp_path / "p.parquet"),
+    ]
+    assert main(base) == 0
+    assert "near_real_time_days" not in seen
+    assert main([*base, "--near-real-time-days", "7"]) == 0
+    assert "near_real_time_days" not in seen
+    captured = capsys.readouterr()
+    assert "--near-real-time-days is deprecated and ignored" in captured.err
+    assert "ingested 1 station-days" in captured.out

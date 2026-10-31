@@ -16,22 +16,6 @@
     "notes": "SYNTHETIC FIXTURE rows (is_fixture=True) - not observations."
   },
   {
-    "dataset_id": "weather_observations::open_meteo",
-    "name": "Daily weather observations (Open-Meteo / ERA5 reanalysis)",
-    "source": "https://archive-api.open-meteo.com/v1/archive",
-    "license": "Open-Meteo / Copernicus ERA5 terms (attribution required)",
-    "treatment": "real",
-    "path": "data/processed/weather.parquet",
-    "row_count": 124,
-    "observation_start": "2026-01-01 00:00:00+00:00",
-    "observation_end": "2026-01-31 00:00:00+00:00",
-    "vintage": null,
-    "checksum_sha256": "6278da7872a5d1747aa95ba1e8618a09c845c2fcbc0f7ea891c6a0adbe093f23",
-    "acquired_at": "2026-10-15T18:21:06.438072+00:00",
-    "generated_by": "haze-pipelines 0.1.0",
-    "notes": "Daily aggregates assumed available 48h after observation day (point-in-time safety)."
-  },
-  {
     "dataset_id": "plantation_polygons::BNPB_GlobalForestWatch2",
     "name": "Plantation/concession polygons (BNPB_GlobalForestWatch2)",
     "source": "data\\raw\\concessions\\bnpb_gfw_2026.geojson",
@@ -94,5 +78,37 @@
     "acquired_at": "2026-10-15T18:21:56.315378+00:00",
     "generated_by": "haze-pipelines 0.1.0",
     "notes": "Baseline hazard score (0-1), not a calibrated probability, not a validated fire forecast, and not a probability of default."
+  },
+  {
+    "dataset_id": "haze_aerosol::cams_open_meteo",
+    "name": "Haze/aerosol indicators (CAMS via Open-Meteo)",
+    "source": "Open-Meteo Air Quality API / CAMS (points=121, 2022-08-31..2026-10-18)",
+    "license": "CC BY 4.0 (Open-Meteo) / Copernicus CAMS attribution",
+    "treatment": "real",
+    "path": "data/processed/haze_aerosol.parquet",
+    "row_count": 182710,
+    "observation_start": "2022-08-31",
+    "observation_end": "2026-10-18",
+    "vintage": null,
+    "checksum_sha256": "7cc5c7e8416ed72bb369d015c8cabe657debda7442302ff04600a8137d082a1b",
+    "acquired_at": "2026-10-19T08:51:43.288334+00:00",
+    "generated_by": "haze-pipelines 0.1.0",
+    "notes": "Haze indicators (AOD/PM) - not fire detections and not burned area. CAMS archive via Open-Meteo starts 2022-08-31; deeper haze history (OMPS Aerosol Index 2012+, MODIS MAIAC AOD 2000+) requires NASA Earthdata credentials. Daily aggregates treated as available 72h after the observation day."
+  },
+  {
+    "dataset_id": "weather_observations::nasa_power",
+    "name": "Daily weather observations (NASA POWER / MERRA-2 reanalysis)",
+    "source": "https://power.larc.nasa.gov/api/temporal/daily/point (stations=5, 1981-01-01..2026-10-17)",
+    "license": "NASA POWER open data (attribution required)",
+    "treatment": "real",
+    "path": "data/processed/weather.parquet",
+    "row_count": 83625,
+    "observation_start": "1981-01-01 00:00:00+00:00",
+    "observation_end": "2026-10-16 00:00:00+00:00",
+    "vintage": null,
+    "checksum_sha256": "8ba7e8c4f6758a285bc6e12707ee9fb1777a081a92fadda29acc356da9860b12",
+    "acquired_at": "2026-10-19T10:32:42.385193+00:00",
+    "generated_by": "haze-pipelines 0.1.0",
+    "notes": "NASA POWER / MERRA-2 daily reanalysis (fallback when the free Open-Meteo ERA5 archive quota is exhausted). MERRA-2 is not ERA5; missing -999 values are mapped to NaN."
   }
 ]
